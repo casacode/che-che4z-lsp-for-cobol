@@ -12,71 +12,9 @@
  *   Broadcom, Inc. - initial API and implementation
  */
 
-import * as path from "path";
 import { clearCache } from "../../commands/ClearCopybookCacheCommand";
 import * as vscode from "vscode";
 
-jest.mock("vscode", () => ({
-  Uri: {
-    parse: jest.fn().mockReturnValue(path.join("tmp-ws", ".c4z", ".copybooks")),
-    file: jest.fn().mockReturnValue({
-      fsPath: path.join(__dirname, ".zowe"),
-      with: jest
-        .fn()
-        .mockImplementation(
-          (change: {
-            scheme?: string;
-            authority?: string;
-            path?: string;
-            query?: string;
-            fragment?: string;
-          }) => {
-            return {
-              path: change.path,
-              fsPath: change.path,
-              with: jest.fn().mockReturnValue({ path: change.path }),
-            };
-          },
-        ),
-    }),
-  },
-  window: {
-    setStatusBarMessage: jest.fn().mockResolvedValue(true),
-    showInformationMessage: jest
-      .fn()
-      .mockImplementation((message: string) => Promise.resolve(message)),
-  },
-  workspace: {
-    fs: {
-      delete: jest.fn().mockReturnValue(true),
-      readDirectory: jest.fn().mockResolvedValue([["fileName", 2]]),
-    },
-    workspaceFolders: [
-      {
-        uri: {
-          fsPath: "tmp-ws",
-          with: jest
-            .fn()
-            .mockImplementation(
-              (change: {
-                scheme?: string;
-                authority?: string;
-                path?: string;
-                query?: string;
-                fragment?: string;
-              }) => {
-                return {
-                  path: change.path,
-                  fsPath: change.path,
-                  with: jest.fn().mockReturnValue({ path: change.path }),
-                };
-              },
-            ),
-        },
-      } as any,
-    ],
-  },
-}));
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -86,11 +24,37 @@ afterAll(() => {
 });
 
 describe("Tests downloaded copybook cache clear", () => {
-  it("checks running command multiple times doesn't produce error", () => {
-    expect(() => {
-      for (let index = 0; index < 3; index++) {
-        clearCache(vscode.Uri.file("/storagePath"));
-      }
-    }).not.toThrowError();
+  it("verify that the clearCache tries to delete cache directories", async () => {
+    await clearCache(vscode.Uri.file("/storagePath"));
+    expect(vscode.workspace.fs.readDirectory).toHaveBeenNthCalledWith(1, {
+      path: "/storagePath/zowe/copybooks",
+    });
+    expect(vscode.workspace.fs.readDirectory).toHaveBeenNthCalledWith(2, {
+      path: "/storagePath/e4e/copybooks",
+    });
+    expect(vscode.workspace.fs.delete).toHaveBeenNthCalledWith(
+      1,
+      { path: "/storagePath/zowe/copybooks/fileName" },
+      { recursive: true, useTrash: false },
+    );
+    expect(vscode.workspace.fs.delete).toHaveBeenNthCalledWith(
+      2,
+      { path: "/storagePath/e4e/copybooks/fileName" },
+      { recursive: true, useTrash: false },
+    );
+  });
+
+  describe("Cache clear errors", () => {
+    beforeAll(() => {
+      jest
+        .spyOn(vscode.workspace.fs, "readDirectory")
+        .mockImplementation(() => {
+          throw vscode.FileSystemError.FileNotFound();
+        });
+    });
+
+    it("doesn't fail if cache folder doesn't exist", async () => {
+      await clearCache(vscode.Uri.file("/storagePath"));
+    });
   });
 });

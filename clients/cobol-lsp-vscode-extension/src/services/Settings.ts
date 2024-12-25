@@ -12,10 +12,8 @@
  *   Broadcom, Inc. - initial API and implementation
  */
 
-import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { Utils } from "./util/Utils";
 import {
   COPYBOOK_EXTENSIONS,
   PATHS_LOCAL_KEY,
@@ -29,13 +27,12 @@ import {
   SETTINGS_CPY_SECTION,
   SETTINGS_DIALECT,
   SETTINGS_SUBROUTINE_LOCAL_KEY,
-  SETTINGS_TAB_CONFIG,
   SETTINGS_SQL_BACKEND,
   SETTINGS_COMPILE_OPTIONS,
   DIALECT_LIBS,
   COBOL_PRGM_LAYOUT,
+  SETTINGS_CPY_NDVR_DEPENDENCIES,
 } from "../constants";
-import cobolSnippets = require("../services/snippetcompletion/cobolSnippets.json");
 import { DialectRegistry, DIALECT_REGISTRY_SECTION } from "./DialectRegistry";
 import {
   loadProcessorGroupCompileOptionsConfig,
@@ -46,77 +43,143 @@ import {
   loadProcessorGroupDialectConfig,
   loadProcessorGroupSqlBackendConfig,
 } from "./ProcessorGroups";
-import { getProgramNameFromUri } from "./util/FSUtils";
+import { getVariablesFromUri, SupportedVariables } from "./util/FSUtils";
 import { SettingsUtils } from "./util/SettingsUtils";
+import { decodeUnknown, DecodingError } from "./util/decoder";
+import * as t from "io-ts";
+import { getChannel } from "../extension";
 
-export class TabRule {
-  // tslint:disable-next-line:no-unnecessary-initializer
-  public constructor(
-    public stops: number[],
-    public maxPosition: number,
-    public regex: string | undefined = undefined,
-  ) {}
+interface Request {
+  items: Item[];
 }
 
-export class TabSettings {
-  public constructor(public rules: TabRule[], public defaultRule: TabRule) {}
+interface Item {
+  section: string;
+  scopeUri?: string;
+  dialect?: string;
 }
 
-export function configHandler(request: any): Array<any> {
-  const result = new Array<any>();
-  for (let item of request.items) {
+const DialectsConfigurationCodec = t.array(t.string);
+export type DialectsConfiguration = t.TypeOf<typeof DialectsConfigurationCodec>;
+const CopybooksLocalPathsConfigurationCodec = t.array(t.string);
+export type CopybooksLocalPathsConfiguration = t.TypeOf<
+  typeof CopybooksLocalPathsConfigurationCodec
+>;
+const CopybookExtensionsConfigurationCodec = t.array(t.string);
+const TargetSQLBackendConfigurationCodec = t.string;
+const CopybookEncodingConfigurationCodec = t.string;
+const CompileOptionsConfigurationCodec = t.string;
+
+async function handleProcessorGroupConfigurationRequest<Type, Output, R>(
+  codec: t.Type<Type, Output, unknown>,
+  processorGroupLoader: (
+    requestItem: { section: string; scopeUri: string },
+    cfg: Type,
+  ) => Promise<R>,
+  item: Item,
+  result: (R | undefined)[],
+) {
+  if (item.scopeUri) {
     try {
-      if (item.section === DIALECT_REGISTRY_SECTION) {
-        const object = DialectRegistry.getDialects();
+      const configuration = vscode.workspace
+        .getConfiguration()
+        .get(item.section);
+      if (typeof configuration !== "undefined") {
+        const decodedConfiguration = decodeUnknown(codec, configuration);
+        const itemWithScope = {
+          scopeUri: item.scopeUri,
+          section: item.section,
+        };
+        const object = await processorGroupLoader(
+          itemWithScope,
+          decodedConfiguration,
+        );
         result.push(object);
-      } else if (item.scopeUri) {
-        const cfg = vscode.workspace.getConfiguration().get(item.section);
-        if (item.section === SETTINGS_DIALECT) {
-          const object = loadProcessorGroupDialectConfig(item, cfg);
-          result.push(object);
-        } else if (item.section === SETTINGS_CPY_LOCAL_PATH) {
-          const object = loadProcessorGroupCopybookPathsConfig(
-            item,
-            cfg as string[],
-          );
-          result.push(object);
-        } else if (item.section === DIALECT_LIBS && !!item.dialect) {
-          const dialectLibs = SettingsService.getCopybookLocalPath(
-            item.scopeUri,
-            item.dialect,
-          );
-          result.push(dialectLibs);
-        } else if (item.section === SETTINGS_CPY_EXTENSIONS) {
-          const object = loadProcessorGroupCopybookExtensionsConfig(
-            item,
-            cfg as string[],
-          );
-          result.push(object);
-        } else if (item.section === SETTINGS_SQL_BACKEND) {
-          const object = loadProcessorGroupSqlBackendConfig(
-            item,
-            cfg as string,
-          );
-          result.push(object);
-        } else if (item.section === SETTINGS_CPY_FILE_ENCODING) {
-          const object = loadProcessorGroupCopybookEncodingConfig(
-            item,
-            cfg as string,
-          );
-          result.push(object);
-        } else if (item.section === SETTINGS_COMPILE_OPTIONS) {
-          const object = loadProcessorGroupCompileOptionsConfig(
-            item,
-            cfg as string,
-          );
-          result.push(object);
-        } else {
-          result.push(cfg);
-        }
-      } else if (item.section === COBOL_PRGM_LAYOUT) {
-        result.push(SettingsService.getCobolProgramLayout());
       } else {
-        result.push(vscode.workspace.getConfiguration().get(item.section));
+        result.push(configuration);
+      }
+    } catch (err) {
+      if (err instanceof DecodingError) {
+        getChannel().appendLine(
+          `Invalid settings: ${item.section} - ${err.message}`,
+        );
+      }
+    }
+  } else {
+    result.push(vscode.workspace.getConfiguration().get(item.section));
+  }
+}
+
+export async function lspConfigHandler(request: Request) {
+  const result: unknown[] = [];
+  for (const item of request.items) {
+    try {
+      switch (item.section) {
+        case DIALECT_REGISTRY_SECTION:
+          result.push(DialectRegistry.getDialects());
+          break;
+        case COBOL_PRGM_LAYOUT:
+          result.push(SettingsService.getCobolProgramLayout());
+          break;
+        case SETTINGS_DIALECT:
+          await handleProcessorGroupConfigurationRequest(
+            DialectsConfigurationCodec,
+            loadProcessorGroupDialectConfig,
+            item,
+            result,
+          );
+          break;
+        case SETTINGS_CPY_LOCAL_PATH:
+          await handleProcessorGroupConfigurationRequest(
+            CopybooksLocalPathsConfigurationCodec,
+            loadProcessorGroupCopybookPathsConfig,
+            item,
+            result,
+          );
+          break;
+        case SETTINGS_CPY_EXTENSIONS:
+          await handleProcessorGroupConfigurationRequest(
+            CopybookExtensionsConfigurationCodec,
+            loadProcessorGroupCopybookExtensionsConfig,
+            item,
+            result,
+          );
+          break;
+        case SETTINGS_SQL_BACKEND:
+          await handleProcessorGroupConfigurationRequest(
+            TargetSQLBackendConfigurationCodec,
+            loadProcessorGroupSqlBackendConfig,
+            item,
+            result,
+          );
+          break;
+        case SETTINGS_CPY_FILE_ENCODING:
+          await handleProcessorGroupConfigurationRequest(
+            CopybookEncodingConfigurationCodec,
+            loadProcessorGroupCopybookEncodingConfig,
+            item,
+            result,
+          );
+          break;
+        case SETTINGS_COMPILE_OPTIONS:
+          await handleProcessorGroupConfigurationRequest(
+            CompileOptionsConfigurationCodec,
+            loadProcessorGroupCompileOptionsConfig,
+            item,
+            result,
+          );
+          break;
+        case DIALECT_LIBS:
+          if (item.dialect && item.scopeUri) {
+            const dialectLibs = await SettingsService.getCopybookLocalPath(
+              item.scopeUri,
+              item.dialect,
+            );
+            result.push(dialectLibs);
+          }
+          break;
+        default:
+          result.push(vscode.workspace.getConfiguration().get(item.section));
       }
     } catch (error) {
       console.log(error);
@@ -126,7 +189,7 @@ export function configHandler(request: any): Array<any> {
 }
 
 /**
- * SettingsService provides read/write configurstion settings functionality
+ * SettingsService provides read/write configuration settings functionality
  */
 export class SettingsService {
   public static readonly DEFAULT_DIALECT = "COBOL";
@@ -146,18 +209,17 @@ export class SettingsService {
    * @param dialectType name of the cobol dialect type
    * @returns a list of local path
    */
-  public static getCopybookLocalPath(
+  public static async getCopybookLocalPath(
     documentUri: string,
     dialectType: string,
-  ): string[] {
-    const pgPaths = loadProcessorGroupCopybookPaths(documentUri, dialectType);
-    const cobolFileName = getProgramNameFromUri(documentUri);
-    let paths: string[] = [
-      ...SettingsService.evaluateVariable(
-        pgPaths,
-        "fileBasenameNoExtension",
-        cobolFileName,
-      ),
+  ): Promise<string[]> {
+    const pgPaths = await loadProcessorGroupCopybookPaths(
+      documentUri,
+      dialectType,
+    );
+    const vars = getVariablesFromUri(documentUri);
+    const paths: string[] = [
+      ...SettingsService.evaluateVariables(pgPaths, vars),
       ...SettingsService.getCopybookConfigValues(
         PATHS_LOCAL_KEY,
         documentUri,
@@ -169,9 +231,9 @@ export class SettingsService {
     return SettingsService.prepareLocalSearchFolders(paths, wsFolders);
   }
 
-  public static getCopybookExtension(
+  public static async getCopybookExtension(
     documentUri: string,
-  ): string[] | undefined {
+  ): Promise<string[] | undefined> {
     const global: string[] | undefined = vscode.workspace
       .getConfiguration(SETTINGS_CPY_SECTION)
       .get(COPYBOOK_EXTENSIONS);
@@ -232,44 +294,6 @@ export class SettingsService {
   }
 
   /**
-   * Retrieves and parse tab settings configuration that can be boolean, array or an object
-   * @returns a TabSettings object
-   */
-  public static getTabSettings(): TabSettings {
-    const config = vscode.workspace.getConfiguration().get(SETTINGS_TAB_CONFIG);
-    let settings = new TabSettings([], new TabRule([0, 6, 7, 11], 72));
-    if (Array.isArray(config)) {
-      const stops = config as number[];
-      if (stops !== undefined && stops.length > 0) {
-        const tabRule = new TabRule(stops, stops[stops.length - 1]);
-        settings = new TabSettings([], tabRule);
-      }
-    } else if (typeof config === "object") {
-      const obj = config as { default: number[]; anchors: number };
-      let defaultRule = new TabRule([0, 6, 7, 11], 72);
-      const stops = obj.default as number[];
-      if (stops !== undefined && stops.length > 0) {
-        defaultRule = new TabRule(stops, stops[stops.length - 1]);
-      }
-      let rules: TabRule[] = [];
-      const anchors = obj.anchors;
-      if (obj.anchors !== undefined && Object.keys(anchors).length > 0) {
-        const keys = Object.keys(anchors);
-        const values = Object.values(anchors);
-        for (let i = 0; i < keys.length; i++) {
-          const regex = keys[i] as string;
-          const stops = values[i] as number[];
-          if (regex !== undefined && stops !== undefined && stops.length > 0) {
-            rules.push(new TabRule(stops, stops[stops.length - 1], regex));
-          }
-        }
-      }
-      settings = new TabSettings(rules, defaultRule);
-    }
-    return settings;
-  }
-
-  /**
    * Return the code page for the copybook file encoding supplied by user
    * @returns string
    */
@@ -277,25 +301,6 @@ export class SettingsService {
     return vscode.workspace
       .getConfiguration(SETTINGS_CPY_SECTION)
       .get("copybook-file-encoding");
-  }
-
-  /**
-   * Return the dialect type supplied by user
-   * @returns Map of snippets
-   */
-  public static async getSnippetsForCobol(): Promise<Map<any, any>> {
-    const map: Map<any, any> = new Map<any, any>([
-      ...Object.entries(cobolSnippets),
-    ]);
-    return map;
-  }
-
-  /**
-   * Gets list of desired fialects
-   * @returns a list of desired fialects
-   */
-  public static getDialects(): string[] | undefined {
-    return vscode.workspace.getConfiguration().get(SETTINGS_DIALECT);
   }
 
   /**
@@ -311,18 +316,30 @@ export class SettingsService {
     return vscode.workspace.getConfiguration().get(COBOL_PRGM_LAYOUT);
   }
 
-  private static evaluateVariable(
+  public static evaluateVariables(
     dataList: string[] | undefined,
-    variable: string,
-    value: string,
+    vars: SupportedVariables,
   ): string[] {
-    const result: string[] = [];
-    if (dataList) {
-      dataList.forEach((d) =>
-        result.push(d.replace(`$\{${variable}\}`, value)),
-      );
-    }
-    return result;
+    if (!dataList) return [];
+    return dataList.map((d) =>
+      d
+        .replace(/\${fileBasenameNoExtension}/g, vars.filename)
+        .replace(/\${fileDirname}/g, vars.dirName)
+        .replace(/\${fileDirnameBasename}/g, vars.dirBasename)
+        .replace(
+          /\${workspaceFolder(:[^}]+)?}/g,
+          (_, ws: string | undefined) => {
+            if (ws === undefined) {
+              return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+            }
+            ws = ws.substring(1);
+            return (
+              vscode.workspace.workspaceFolders?.find((x) => x.name === ws)?.uri
+                .fsPath ?? ""
+            );
+          },
+        ),
+    );
   }
 
   private static getCopybookConfigValues(
@@ -330,25 +347,17 @@ export class SettingsService {
     documentUri: string,
     dialectType: string,
   ) {
-    const programFile = getProgramNameFromUri(documentUri);
+    const vars = getVariablesFromUri(documentUri);
     if (dialectType !== SettingsService.DEFAULT_DIALECT) {
       const pathList: string[] | undefined = vscode.workspace
         .getConfiguration(SETTINGS_CPY_SECTION)
         .get(`${dialectType.toLowerCase()}.${section}`);
-      return SettingsService.evaluateVariable(
-        pathList,
-        "fileBasenameNoExtension",
-        programFile,
-      );
+      return SettingsService.evaluateVariables(pathList, vars);
     }
     const pathList: string[] | undefined = vscode.workspace
       .getConfiguration(SETTINGS_CPY_SECTION)
       .get(section);
-    return SettingsService.evaluateVariable(
-      pathList,
-      "fileBasenameNoExtension",
-      programFile,
-    );
+    return SettingsService.evaluateVariables(pathList, vars);
   }
   public static prepareLocalSearchFolders(
     paths: string[],
@@ -363,5 +372,16 @@ export class SettingsService {
         });
     }
     return result;
+  }
+  /**
+   * Gives the configured endevor dependency from settings.
+   *
+   * @returns returns configured endevor dependency
+   */
+  public static getCopybookEndevorDependencySettings(): string | undefined {
+    const setting: string | undefined = vscode.workspace
+      .getConfiguration(SETTINGS_CPY_SECTION)
+      .get(SETTINGS_CPY_NDVR_DEPENDENCIES);
+    return setting;
   }
 }

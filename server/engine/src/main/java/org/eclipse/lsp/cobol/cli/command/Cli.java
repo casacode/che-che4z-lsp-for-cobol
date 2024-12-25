@@ -18,6 +18,7 @@ import com.google.gson.*;
 import com.google.inject.Injector;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,9 +49,18 @@ import static org.eclipse.lsp.cobol.cli.command.CliUtils.setupPipeline;
 /**
  * The Cli class represents a Command Line Interface (CLI) for interacting with the application.
  */
-@CommandLine.Command(description = "COBOL Analysis CLI tools.", mixinStandardHelpOptions = true, scope = CommandLine.ScopeType.INHERIT, subcommands = {ListSources.class, ListCopybooks.class, CliAnalysis.class})
+@CommandLine.Command(description = "COBOL Analysis CLI tools.", mixinStandardHelpOptions = true, scope = CommandLine.ScopeType.INHERIT,
+    subcommands = {
+        ListSources.class,
+        ListCopybooks.class,
+        CliAnalysis.class,
+        CliCFAST.class
+    })
 @Slf4j
 public class Cli implements Callable<Integer> {
+  static final int SUCCESS = 0;
+  static final int FAILURE = 1;
+
   ProcessorGroupsResolver processorGroupsResolver;
 
   /**
@@ -61,10 +71,10 @@ public class Cli implements Callable<Integer> {
    */
   @Override
   public Integer call() throws Exception {
-    return 0;
+    return SUCCESS;
   }
 
-  Result runAnalysis(File src, CobolLanguageId dialect, Injector diCtx, boolean isAnalysisRequired) throws IOException {
+  Result runAnalysis(File src, CobolLanguageId dialect, Injector diCtx, boolean isAnalysisRequired, boolean collectAstChanges) throws IOException {
     String documentUri = src.toURI().toString();
     Pipeline<AnalysisContext> pipeline = setupPipeline(diCtx, isAnalysisRequired, dialect);
 
@@ -74,7 +84,10 @@ public class Cli implements Callable<Integer> {
 
     String text = new String(Files.readAllBytes(src.toPath()));
     ResultWithErrors<ExtendedText> resultWithErrors = preprocessor.cleanUpCode(documentUri, text);
-    AnalysisContext ctx = new AnalysisContext(new ExtendedDocument(resultWithErrors.getResult(), text), createAnalysisConfiguration(), benchmarkService.startSession(), documentUri, text, dialect);
+    AnalysisConfig config = AnalysisConfig.defaultConfig(CopybookProcessingMode.ENABLED, collectAstChanges);
+    ExtendedDocument extendedDocument = new ExtendedDocument(resultWithErrors.getResult(), text);
+    BenchmarkSession benchmarkSession = benchmarkService.startSession();
+    AnalysisContext ctx = new AnalysisContext(extendedDocument, config, benchmarkSession, documentUri, text, dialect);
     ctx.getAccumulatedErrors().addAll(resultWithErrors.getErrors());
     PipelineResult pipelineResult = pipeline.run(ctx);
     return new Result(ctx, pipelineResult);
@@ -93,7 +106,7 @@ public class Cli implements Callable<Integer> {
     }
   }
 
-  void initProcessorGroupsReader(Path workspace) {
+  void initProcessorGroupsReader(Path workspace) throws IOException {
     if (workspace == null) {
       return;
     }
@@ -104,9 +117,11 @@ public class Cli implements Callable<Integer> {
         processorGroupsResolver = new ProcessorGroupsResolver(new String(Files.readAllBytes(programConfig)), new String(Files.readAllBytes(groupsConfig)));
       } catch (IOException e) {
         LOG.error("Processor group configuration read error", e);
+        throw e;
       }
     } else {
       LOG.warn("Processor group configuration is missing");
+      throw new FileNotFoundException("Processor group configuration is missing");
     }
   }
 
@@ -115,9 +130,5 @@ public class Cli implements Callable<Integer> {
     benchmarkSession.getMeasurements().forEach(m -> tObj.add(m.getId(), new JsonPrimitive(m.getTime() / 1_000_000_000.0)));
     result.add("timings", tObj);
     benchmarkSession.getMeasurements().stream().map(Measurement::getTime).reduce(Long::sum).ifPresent(totalTime -> tObj.add("total", new JsonPrimitive(totalTime / 1_000_000_000.0)));
-  }
-
-  private static AnalysisConfig createAnalysisConfiguration() {
-    return AnalysisConfig.defaultConfig(CopybookProcessingMode.ENABLED);
   }
 }

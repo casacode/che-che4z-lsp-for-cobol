@@ -79,7 +79,6 @@ public class ReplacingServiceImpl implements ReplacingService {
     this.messageService = messageService;
   }
 
-  @NonNull
   @Override
   public void applyReplacing(@NonNull ExtendedDocument extendedDocument, @NonNull ReplaceData replaceData) {
     for (Pair<String, String> replacePattern : replaceData.getReplacePatterns()) {
@@ -230,14 +229,16 @@ public class ReplacingServiceImpl implements ReplacingService {
   }
 
   private void replace(@NonNull ExtendedDocument extendedDocument, @NonNull Pair<String, String> pattern, @NonNull Range scope) {
-    if (StringUtils.isBlank(extendedDocument.toString())) {
+    String text = extendedDocument.toString();
+    if (StringUtils.isBlank(text)) {
       return;
     }
-    String text = extendedDocument.toString();
     try {
       Matcher matcher = Pattern.compile(pattern.getLeft(), Pattern.CASE_INSENSITIVE).matcher(text);
       while (matcher.find()) {
-        Range range = getRange(text, matcher);
+        Range range = new Range(
+                getPosition(text, matcher.start()),
+                getPosition(text, matcher.end()));
         if (RangeUtils.isInside(range, scope)) {
           extendedDocument.replace(range, pattern.getRight());
         }
@@ -246,12 +247,6 @@ public class ReplacingServiceImpl implements ReplacingService {
     } catch (IndexOutOfBoundsException e) {
       LOG.error(format(ERROR_REPLACING, text, pattern), e);
     }
-  }
-
-  private Range getRange(String text, Matcher matcher) {
-    Position start = getPosition(text, matcher.start());
-    Position end = getPosition(text, matcher.end());
-    return new Range(start, new Position(end.getLine(), end.getCharacter() - 1));
   }
 
   private Position getPosition(String text, int positionInFile) {

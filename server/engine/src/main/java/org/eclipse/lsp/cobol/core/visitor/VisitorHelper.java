@@ -14,31 +14,32 @@
  */
 package org.eclipse.lsp.cobol.core.visitor;
 
+import static java.util.Optional.ofNullable;
+import static java.util.stream.Collectors.toList;
+import static org.eclipse.lsp.cobol.common.OutlineNodeNames.FILLER_NAME;
+import static org.eclipse.lsp.cobol.core.CobolDataDivisionParser.*;
+
 import com.google.common.collect.ImmutableList;
+import java.util.*;
+import java.util.function.Function;
+import javax.annotation.Nonnull;
 import lombok.extern.slf4j.Slf4j;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.RuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
+import org.eclipse.lsp.cobol.AntlrRangeUtils;
 import org.eclipse.lsp.cobol.common.model.Locality;
 import org.eclipse.lsp.cobol.common.model.tree.Node;
-import org.eclipse.lsp.cobol.core.CobolDataDivisionParser;
-import org.eclipse.lsp.cobol.common.model.tree.variable.ValueInterval;
 import org.eclipse.lsp.cobol.common.model.tree.variable.UsageFormat;
+import org.eclipse.lsp.cobol.common.model.tree.variable.ValueInterval;
+import org.eclipse.lsp.cobol.core.CobolDataDivisionParser;
 import org.eclipse.lsp.cobol.core.CobolParser;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
-
-import javax.annotation.Nonnull;
-import java.util.*;
-import java.util.function.Function;
-
-import static java.util.Optional.ofNullable;
-import static java.util.stream.Collectors.toList;
-import static org.eclipse.lsp.cobol.core.CobolDataDivisionParser.*;
-import static org.eclipse.lsp.cobol.common.OutlineNodeNames.FILLER_NAME;
 
 /** Utility class for visitor and delegates classes with useful methods */
 @Slf4j
@@ -194,8 +195,7 @@ public class VisitorHelper {
     return contexts.stream()
             .map(org.eclipse.lsp.cobol.core.CobolParser.DataUsageClauseContext::usageFormat)
             .filter(Objects::nonNull)
-            .map(org.eclipse.lsp.cobol.core.CobolParser.UsageFormatContext::getStart)
-            .map(Token::getText)
+            .map(org.eclipse.lsp.cobol.core.CobolParser.UsageFormatContext::getText)
             .map(UsageFormat::of)
             .collect(toList());
   }
@@ -251,36 +251,11 @@ public class VisitorHelper {
    * @param ctx ParserRuleContext to extract locality
    * @return locality which has a range from the start to the end of the rule
    */
-  public static Optional<Range> retrieveRangeLocality(ParserRuleContext ctx) {
+  public static Optional<Range> retrieveRangeLocality(ParseTree ctx) {
     if (ctx == null) {
       return Optional.empty();
     }
-    return Optional.of(constructRange(ctx));
-  }
-
-  /**
-   * Construct the range from ANTLR context
-   *
-   * @param ctx the ANTLR context
-   * @return the range
-   */
-  public static Range constructRange(ParserRuleContext ctx) {
-    Token start = ctx.start;
-    Token end = ctx.stop;
-
-    if (start.getLine() > end.getLine()) {
-      start = ctx.stop;
-      end = ctx.start;
-    }
-
-    return new Range(
-        new Position(
-            start.getLine() - 1,
-            start.getCharPositionInLine()),
-        new Position(
-            end.getLine() - 1,
-            end.getCharPositionInLine() + end.getStopIndex() - end.getStartIndex() + 1)
-    );
+    return Optional.of(AntlrRangeUtils.constructRange(ctx));
   }
 
   /**
@@ -304,7 +279,7 @@ public class VisitorHelper {
    * specific exception
    */
   public static void checkInterruption() {
-    if (Thread.interrupted()) {
+    if (Thread.currentThread().isInterrupted()) {
       LOG.debug("Parsing interrupted by user");
       throw new ParseCancellationException("Parsing interrupted by user");
     }
@@ -368,9 +343,13 @@ public class VisitorHelper {
    * @return locality object
    */
   public static Locality buildNameRangeLocality(ParserRuleContext ctx, String name, String uri) {
+    int startLine = Optional.ofNullable(ctx.start).map(Token::getLine).orElse(1) - 1;
+    int startCharPos = Optional.ofNullable(ctx.start).map(Token::getCharPositionInLine).orElse(0);
+    int stopLine = Optional.ofNullable(ctx.stop).map(Token::getLine).orElse(startLine + 1) - 1;
+
     Range range = new Range(
-        new Position(ctx.start.getLine() - 1, ctx.start.getCharPositionInLine()),
-        new Position(ctx.stop.getLine() - 1, ctx.start.getCharPositionInLine() + name.length()));
+        new Position(startLine, startCharPos),
+        new Position(stopLine, startCharPos + name.length()));
 
     return Locality.builder()
         .uri(uri)

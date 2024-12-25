@@ -30,13 +30,14 @@ export class CopybookDownloaderForUss extends ZoweExplorerDownloader {
    * @param documentUri cobol programs which needs copybook
    * @param dsnPath dsnpath in mainframe.
    */
-  async isEligibleForDownload(
+  isEligibleForDownload(
     _copybookName: CopybookName,
     documentUri: string,
     ussPath: string | undefined,
-  ): Promise<boolean> {
-    const providedProfile = await ProfileUtils.getProfileNameForCopybook(
+  ): boolean {
+    const providedProfile = ProfileUtils.getProfileNameForCopybook(
       documentUri,
+      this.explorerAPI,
     );
     return !!(ussPath && providedProfile);
   }
@@ -53,10 +54,11 @@ export class CopybookDownloaderForUss extends ZoweExplorerDownloader {
     documentUri: string,
     ussPath: string,
   ): Promise<boolean> {
-    const providedProfile = await ProfileUtils.getProfileNameForCopybook(
+    const providedProfile = ProfileUtils.getProfileNameForCopybook(
       documentUri,
+      this.explorerAPI,
     );
-    if (await this.isEligibleForDownload(copybookName, documentUri, ussPath)) {
+    if (this.isEligibleForDownload(copybookName, documentUri, ussPath)) {
       const memberList = await this.getAllMembers(providedProfile!, ussPath);
       const remoteCopybook = DownloadUtil.getRemoteCopybookName(
         memberList,
@@ -85,7 +87,7 @@ export class CopybookDownloaderForUss extends ZoweExplorerDownloader {
     const response = await this.explorerAPI
       .getUssApi(profile)
       .fileList(dataset);
-    const members = response.apiResponse.items.map((el: any) => el.name);
+    const members = response.apiResponse.items.map((el) => el.name);
 
     this.memberListCache.set(id, members);
     return members;
@@ -101,7 +103,7 @@ export class CopybookDownloaderForUss extends ZoweExplorerDownloader {
     dataset: string,
     member: string,
     profileName: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const loadedProfile = DownloadUtil.loadProfile(
       profileName,
       this.explorerAPI,
@@ -115,14 +117,15 @@ export class CopybookDownloaderForUss extends ZoweExplorerDownloader {
 
     await this.explorerAPI
       .getUssApi(loadedProfile)
-      .getContents(`${dataset}/${member}`, {
-        ...downloadOptions,
-        file: downloadOptions.file.fsPath,
-      });
+      .getContents(`${dataset}/${member}`, downloadOptions.apiOptions);
 
-    await this.encodeDownloadedContent(
-      downloadOptions.file,
-      downloadOptions.encoding,
-    );
+    if (downloadOptions.decode) {
+      await this.decodeBinaryContent(
+        downloadOptions.fileUri,
+        downloadOptions.decode,
+      );
+    }
+
+    return true;
   }
 }

@@ -19,11 +19,16 @@ import com.google.common.cache.CacheBuilder;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.google.inject.name.Named;
+
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.eclipse.lsp.cobol.common.copybook.CopybookId;
 import org.eclipse.lsp.cobol.common.copybook.CopybookModel;
+import org.eclipse.lsp.cobol.common.utils.ImplicitCodeUtils;
 
 /**
  * Implements copybook cache functionality
@@ -50,6 +55,21 @@ public class CopybookCache {
    */
   public void invalidateAll() {
     cache.invalidateAll();
+  }
+
+  /** Invalidates only non-implicit copybook cache */
+  public void invalidateAllNonImplicit() {
+    List<CopybookId> toInvalidate =
+        cache.asMap().entrySet().stream()
+            .filter(this::shouldInvalidate)
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toList());
+    cache.invalidateAll(toInvalidate);
+  }
+
+  private boolean shouldInvalidate(Map.Entry<CopybookId, CopybookModel> entry) {
+    CopybookModel model = entry.getValue();
+    return model.getUri() == null || !ImplicitCodeUtils.isImplicit(model.getUri());
   }
 
   /**

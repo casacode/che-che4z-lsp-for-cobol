@@ -15,15 +15,21 @@
 package org.eclipse.lsp.cobol.implicitDialects.sql;
 
 import com.google.common.collect.ImmutableList;
+
 import java.util.List;
+import java.util.Optional;
+
 import lombok.experimental.UtilityClass;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.apache.commons.lang3.tuple.Pair;
 import org.eclipse.lsp.cobol.common.dialects.DialectProcessingContext;
 import org.eclipse.lsp.cobol.common.mapping.OriginalLocation;
 import org.eclipse.lsp.cobol.common.model.Locality;
 import org.eclipse.lsp.cobol.common.model.tree.Node;
 import org.eclipse.lsp.cobol.common.model.tree.variable.QualifiedReferenceNode;
 import org.eclipse.lsp.cobol.common.model.tree.variable.VariableUsageNode;
+import org.eclipse.lsp.cobol.implicitDialects.sql.node.ExecSqlWheneverNode;
 import org.eclipse.lsp4j.Location;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
@@ -105,7 +111,7 @@ class Db2SqlVisitorHelper {
 
   public OriginalLocation adjustLocation(
           OriginalLocation originalLocation,
-          Db2SqlParser.SqlCodeContext sqlCodeContext) {
+          ParserRuleContext sqlCodeContext) {
     Location location = originalLocation.getLocation();
     Range updatedRange =
             new Range(
@@ -135,19 +141,32 @@ class Db2SqlVisitorHelper {
 
   public static Position getAdjustedEndPosition(
           ParserRuleContext sqlCodeContext, Position position) {
-    Position end;
-    if (position.getLine() == 0) {
-      end =
-              new Position(
-                      position.getLine() + sqlCodeContext.start.getLine() - 1,
-                      position.getCharacter()
-                              + sqlCodeContext.start.getCharPositionInLine());
-    } else {
-      end =
-              new Position(
-                      position.getLine() + sqlCodeContext.start.getLine() - 1,
-                      position.getCharacter());
+      int character = position.getCharacter() + (
+            position.getLine() == 0
+                    ? sqlCodeContext.start.getCharPositionInLine()
+                    : 0);
+    return new Position(position.getLine() + sqlCodeContext.start.getLine() - 1, character);
+  }
+
+  public static ExecSqlWheneverNode.WheneverConditionType getConditionType(Db2SqlExecParser.Dbs_wheneverContext ctx) {
+    if (ctx.SQLERROR() != null)
+      return ExecSqlWheneverNode.WheneverConditionType.SQLERROR;
+    else if (ctx.SQLWARNING() != null)
+      return ExecSqlWheneverNode.WheneverConditionType.SQLWARNING;
+    else
+      return ExecSqlWheneverNode.WheneverConditionType.NOT_FOUND;
+  }
+
+  public static Pair<ExecSqlWheneverNode.WheneverType, String> getWheneverType(Db2SqlExecParser.Dbs_wheneverContext ctx) {
+    if (ctx.CONTINUE() != null) {
+      return Pair.of(ExecSqlWheneverNode.WheneverType.CONTINUE, null);
     }
-    return end;
+    return Optional.ofNullable(ctx.dbs_host_name_container())
+        .map(c -> c.dbs_host_names())
+        .filter(hn -> !hn.isEmpty())
+        .map(c -> c.get(0))
+        .map(ParseTree::getText)
+        .map(t -> Pair.of(ExecSqlWheneverNode.WheneverType.GOTO, t))
+        .orElse(Pair.of(ExecSqlWheneverNode.WheneverType.CONTINUE, null));
   }
 }

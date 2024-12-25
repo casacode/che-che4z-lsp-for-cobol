@@ -32,6 +32,7 @@ import org.eclipse.lsp.cobol.common.error.ErrorSource;
 import org.eclipse.lsp.cobol.common.error.SyntaxError;
 import org.eclipse.lsp.cobol.common.message.MessageService;
 import org.eclipse.lsp.cobol.common.model.Locality;
+import org.eclipse.lsp.cobol.common.utils.ThreadInterruptionUtil;
 import org.eclipse.lsp.cobol.core.CobolPreprocessorBaseListener;
 import org.eclipse.lsp.cobol.core.preprocessor.delegates.GrammarPreprocessor;
 import org.eclipse.lsp.cobol.core.preprocessor.delegates.PreprocessorContext;
@@ -176,21 +177,27 @@ public class GrammarPreprocessorListenerImpl extends CobolPreprocessorBaseListen
   }
 
   @Override
-  public void enterReplaceAreaStart(ReplaceAreaStartContext ctx) {
-    Locality locality = preprocessorService.retrieveLocality(ctx);
-    replacementContext = ctx.replacePseudoText().stream()
-        .map(ReplacementHelper::createClause)
-        .map(c -> replacingService.retrievePseudoTextReplacingPattern(c, locality))
-        .map(r -> r.unwrap(errors::addAll))
-        .map(r -> new ReplacementContext(r, locality))
-        .collect(Collectors.toList());
-
-    preprocessorService.replaceWithSpaces(ctx);
+  public void enterEveryRule(ParserRuleContext ctx) {
+    ThreadInterruptionUtil.checkThreadInterrupted();
+    super.enterEveryRule(ctx);
   }
 
   @Override
-  public void enterReplaceOffStatement(ReplaceOffStatementContext ctx) {
+  public void enterReplaceAreaStartOrOffStatement(ReplaceAreaStartOrOffStatementContext ctx) {
+    Locality locality = preprocessorService.retrieveLocality(ctx);
+    if (!ctx.replacePseudoText().isEmpty()) {
+      replacementContext = ctx.replacePseudoText().stream()
+              .map(ReplacementHelper::createClause)
+              .map(c -> replacingService.retrievePseudoTextReplacingPattern(c, locality))
+              .map(r -> r.unwrap(errors::addAll))
+              .map(r -> new ReplacementContext(r, locality))
+              .collect(Collectors.toList());
+    }
+
+    if (ctx.OFF() != null) {
+      replacementContext = null;
+    }
+
     preprocessorService.replaceWithSpaces(ctx);
-    replacementContext = null;
   }
 }

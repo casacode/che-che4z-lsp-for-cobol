@@ -44,6 +44,7 @@ public enum CFASTNodeType {
   EXIT("exit"),
   EXIT_SECTION("exitsection"),
   EXIT_PARAGRAPH("exitparagraph"),
+  EXIT_PERFORM("exitperform"),
   GOBACK("goback"),
   IF("if"),
   ELSE("else"),
@@ -59,7 +60,8 @@ public enum CFASTNodeType {
   XML_PARSE("xmlparse"),
   END_XML("endxml"),
   USE("use"),
-  USE_FOR_DEBUGGING("usefordebugging");
+  USE_FOR_DEBUGGING("usefordebugging"),
+  STATEMENT("statement");
 
   @Getter final String value;
 }

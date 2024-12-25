@@ -28,6 +28,29 @@ export function commentCommand(actionType: CommentAction) {
   new ToggleComments(activeEditor, actionType).doIt();
 }
 
+const allWhitespace = /^ *$/;
+
+function withoutSeqNum(s: string) {
+  return s.substring(6, 72);
+}
+
+function identifyNonEmptyRegion(text: string[]): [number, number] {
+  let nonEmptyStart = text.findIndex(
+    (x) => !allWhitespace.test(withoutSeqNum(x)),
+  );
+  let nonEmptyEnd = text.length;
+
+  if (nonEmptyStart === -1) {
+    nonEmptyStart = 0;
+  } else {
+    for (; nonEmptyEnd > nonEmptyStart; --nonEmptyEnd) {
+      if (!allWhitespace.test(withoutSeqNum(text[nonEmptyEnd - 1]))) break;
+    }
+  }
+
+  return [nonEmptyStart, nonEmptyEnd];
+}
+
 /**
  * Toggles comments in the active text editor based on selection and action type.
  */
@@ -56,15 +79,24 @@ export class ToggleComments {
     const textLines = selectedLines
       .map((it) => it.text)
       .map(ensureIndicatorArea);
-    const processedLines = textLines.map(this.evaluateAction(textLines));
+
+    const [nonEmptyStart, nonEmptyEnd] = identifyNonEmptyRegion(textLines);
+    const toProcess = textLines.slice(nonEmptyStart, nonEmptyEnd);
+    const processedLines = toProcess.map(this.evaluateAction(toProcess));
+
     const lineSeparator =
       this.textEditor.document.eol === vscode.EndOfLine.LF ? "\n" : "\r\n";
     const selectionRange = new vscode.Range(
-      new vscode.Position(selectedLines[0].range.start.line, 0),
-      new vscode.Position(
-        selectedLines[selectedLines.length - 1].range.end.line,
-        selectedLines[selectedLines.length - 1].range.end.character,
-      ),
+      new vscode.Position(selectedLines[0].range.start.line + nonEmptyStart, 0),
+      nonEmptyEnd == textLines.length
+        ? new vscode.Position(
+            selectedLines[selectedLines.length - 1].range.end.line,
+            selectedLines[selectedLines.length - 1].range.end.character,
+          )
+        : new vscode.Position(
+            selectedLines[0].range.start.line + nonEmptyEnd - 1,
+            textLines[nonEmptyEnd - 1].length,
+          ),
     );
     return {
       selection: selectionRange,
@@ -78,15 +110,17 @@ export class ToggleComments {
         return commentLine;
       case CommentAction.UNCOMMENT:
         return uncommentLine;
-      case CommentAction.TOGGLE:
+      case CommentAction.TOGGLE: {
         const allIsComment = textLines
           .map(getLineCommentStatus)
           .every(
             (it) =>
               it === LineCommentStatus.COMMENT ||
-              it === LineCommentStatus.COMMENTED_TWICE,
+              it === LineCommentStatus.COMMENTED_TWICE ||
+              it === LineCommentStatus.FLOATING_COMMENT,
           );
         return allIsComment ? uncommentLine : commentLine;
+      }
     }
   }
 
@@ -109,9 +143,11 @@ export enum LineCommentStatus {
   COMMENTED_TWICE,
   OTHER_TYPE, // the other type is used when we have something other than a comment in indicator area
   NON_COMMENT,
+  FLOATING_COMMENT,
 }
 
 const CBL_REGEXP = new RegExp("^\\s{0,6}((CBL|PROCESS)\\s+.*)$", "i");
+const ALL_SPACES = /^ *$/;
 
 /**
  * Shift CBL/PROCESS to right if it is in sequence or indicator area.
@@ -124,6 +160,13 @@ export function ensureIndicatorArea(line: string): string {
   return line;
 }
 
+function hasFloatingComment(line: string): boolean {
+  const floatingStart = line.indexOf("*>", 7);
+  return (
+    floatingStart != -1 && ALL_SPACES.test(line.substring(7, floatingStart))
+  );
+}
+
 /**
  * Evaluate type of COBOL line in terms of comment / non-comment.
  *
@@ -133,11 +176,18 @@ export function getLineCommentStatus(line: string): LineCommentStatus {
   const indicatorArea = line.charAt(6);
   if (indicatorArea === "*" || indicatorArea === "/") {
     const afterIndicator = line.charAt(7);
-    if (afterIndicator === "*" || afterIndicator === "/")
+    if (
+      afterIndicator === "*" ||
+      afterIndicator === "/" ||
+      hasFloatingComment(line)
+    )
       return LineCommentStatus.COMMENTED_TWICE;
     return LineCommentStatus.COMMENT;
   }
-  if (indicatorArea === " ") return LineCommentStatus.NON_COMMENT;
+  if (indicatorArea === " ") {
+    if (hasFloatingComment(line)) return LineCommentStatus.FLOATING_COMMENT;
+    return LineCommentStatus.NON_COMMENT;
+  }
   return LineCommentStatus.OTHER_TYPE;
 }
 
@@ -150,7 +200,8 @@ export function commentLine(line: string): string {
   const status = getLineCommentStatus(line);
   if (
     status === LineCommentStatus.COMMENT ||
-    status === LineCommentStatus.COMMENTED_TWICE
+    status === LineCommentStatus.COMMENTED_TWICE ||
+    status === LineCommentStatus.FLOATING_COMMENT
   )
     return line.substring(0, 6) + "*" + line.substring(6);
   return setIndicatorTo(line, "*");
@@ -166,6 +217,13 @@ export function uncommentLine(line: string): string {
   if (status === LineCommentStatus.COMMENT) return setIndicatorTo(line, " ");
   if (status === LineCommentStatus.COMMENTED_TWICE)
     return line.substring(0, 6) + line.substring(7);
+  if (status === LineCommentStatus.FLOATING_COMMENT) {
+    const floatingStart = line.indexOf("*>", 6);
+    return (
+      line.substring(0, floatingStart) +
+      line.substring(floatingStart + 2 + +line.startsWith("*> ", floatingStart))
+    );
+  }
   return line;
 }
 

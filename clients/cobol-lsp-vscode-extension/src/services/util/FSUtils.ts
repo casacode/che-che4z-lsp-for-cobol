@@ -15,7 +15,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import { globSync, hasMagic } from "glob";
-import * as urlUtil from "url";
 import { Uri } from "vscode";
 import * as vscode from "vscode";
 import { Utils } from "./Utils";
@@ -31,20 +30,14 @@ export function searchCopybookInExtensionFolder(
   copybookFolders: string[] | undefined,
   extensions: string[] | undefined,
   storagePath: string,
-): string | undefined {
+): Uri | undefined {
   if (!copybookFolders || !extensions) return undefined;
   const extensionFolder = cleanWorkspaceFolderName(storagePath);
   for (const p of copybookFolders) {
     for (const ext of extensions) {
       const searchResult = globSearch(extensionFolder, p, copybookName, ext);
       if (searchResult) {
-        const root = path.parse(searchResult).root;
-        const urlPath = searchResult
-          .substring(root.length)
-          .split(path.sep)
-          .map((s) => encodeURIComponent(s))
-          .join(path.sep);
-        return new urlUtil.URL("file://" + root + urlPath).href;
+        return vscode.Uri.file(searchResult);
       }
     }
   }
@@ -100,13 +93,24 @@ function globSearch(
     : undefined;
 }
 
-export function getProgramNameFromUri(
+export type SupportedVariables = {
+  filename: string;
+  dirName: string;
+  dirBasename: string;
+};
+
+export function getVariablesFromUri(
   uri: string,
   includeExt: boolean = false,
-): string {
-  const fullPath = Uri.parse(uri, true).fsPath;
-  if (includeExt) {
-    return path.basename(fullPath);
-  }
-  return path.basename(fullPath, path.extname(fullPath));
+): SupportedVariables {
+  const u = Uri.parse(uri, true);
+  const p = Uri.joinPath(u, "..");
+  const file = u.path.substring(u.path.lastIndexOf("/") + 1);
+  const dot = file.lastIndexOf(".");
+
+  return {
+    filename: includeExt || dot <= 0 ? file : file.substring(0, dot),
+    dirName: p.fsPath,
+    dirBasename: p.path.substring(p.path.lastIndexOf("/") + 1),
+  };
 }

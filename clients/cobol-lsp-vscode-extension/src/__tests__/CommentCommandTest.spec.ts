@@ -12,6 +12,7 @@
  *   Broadcom, Inc. - initial API and implementation
  */
 
+import { TextEditorEdit } from "../__mocks__/vscode";
 import {
   CommentAction,
   commentLine,
@@ -70,6 +71,11 @@ describe("Validate getLineCommentStatus", () => {
       LineCommentStatus.COMMENTED_TWICE,
     );
   });
+  test("with twice commented line by floating", () => {
+    expect(getLineCommentStatus("123456* *> The comment")).toBe(
+      LineCommentStatus.COMMENTED_TWICE,
+    );
+  });
   test("with non comment line", () => {
     expect(getLineCommentStatus('123456     Display "Hello!"')).toBe(
       LineCommentStatus.NON_COMMENT,
@@ -85,6 +91,16 @@ describe("Validate getLineCommentStatus", () => {
   });
   test("with spaces line", () => {
     expect(getLineCommentStatus("                           ")).toBe(
+      LineCommentStatus.NON_COMMENT,
+    );
+  });
+  test("floating comment", () => {
+    expect(getLineCommentStatus("123456    *>               ")).toBe(
+      LineCommentStatus.FLOATING_COMMENT,
+    );
+  });
+  test("not a floating comment", () => {
+    expect(getLineCommentStatus("123456 A  *>               ")).toBe(
       LineCommentStatus.NON_COMMENT,
     );
   });
@@ -111,6 +127,9 @@ describe("Validate commentLine", () => {
   test("with empty line", () => {
     expect(commentLine("")).toBe("      *");
   });
+  test("with floating comment", () => {
+    expect(commentLine("123456  *>Foobar!")).toBe("123456*  *>Foobar!");
+  });
 });
 
 describe("Validate uncommentLine", () => {
@@ -133,6 +152,10 @@ describe("Validate uncommentLine", () => {
   });
   test("with empty line", () => {
     expect(uncommentLine("")).toBe("");
+  });
+  test("with floating comment", () => {
+    expect(uncommentLine("123456  *>Foobar!")).toBe("123456  Foobar!");
+    expect(uncommentLine("123456  *> Foobar!")).toBe("123456  Foobar!");
   });
 });
 
@@ -161,7 +184,7 @@ describe("Validate ToggleComments", () => {
       edit: jest.fn(),
     } as unknown as vscode.TextEditor;
     new ToggleComments(textEditor, CommentAction.TOGGLE).doIt();
-    expect(textEditor.edit).toBeCalledTimes(0);
+    expect(textEditor.edit).toHaveBeenCalledTimes(0);
   });
 
   // selection[0]
@@ -177,7 +200,7 @@ describe("Validate ToggleComments", () => {
   // selection[3]
   // 25:      d  debug command
 
-  const documentLines = {
+  const documentLines: Record<number, { text: string; range: vscode.Range }> = {
     5: {
       text: "       01  WS-POINT.",
       range: getRange(5, 0, 5, 20),
@@ -199,9 +222,6 @@ describe("Validate ToggleComments", () => {
       range: getRange(25, 0, 25, 22),
     },
   };
-  const editBuilder = {
-    replace: jest.fn(),
-  };
   const textEditor = {
     selections: [
       getRange(5, 12, 6, 25),
@@ -212,37 +232,37 @@ describe("Validate ToggleComments", () => {
     document: {
       lineAt: jest
         .fn()
-        .mockImplementation(
-          (line) => documentLines[line as keyof typeof documentLines],
-        ),
+        .mockImplementation((line: number) => documentLines[line]),
       eol: vscode.EndOfLine.LF,
     },
-    edit: jest.fn().mockImplementation((callback) => callback(editBuilder)),
+    edit: jest
+      .fn()
+      .mockImplementation((callback: (param: unknown) => void) =>
+        callback(TextEditorEdit),
+      ),
   } as unknown as vscode.TextEditor;
 
   afterEach(() => {
-    editBuilder.replace.mockClear();
-    (textEditor.document.lineAt as any).mockClear();
-    (textEditor.edit as any).mockClear();
+    jest.clearAllMocks();
   });
 
   test("with toggle action", () => {
     new ToggleComments(textEditor, CommentAction.TOGGLE).doIt();
     checkCommonCalls();
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(5, 0, 6, 45),
       "      *01  WS-POINT.\n" +
         "      *    05 WS-POINTER USAGE    IS POINTER.",
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(14, 0, 14, 44),
       "           DISPLAY 'From P1:' BAR of FOOBAR.",
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(20, 0, 20, 33),
       '      *    "LLLLLLLLLLMMMMMMMMMM"',
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(25, 0, 25, 22),
       "      *  debug command",
     );
@@ -251,20 +271,20 @@ describe("Validate ToggleComments", () => {
   test("with comment action", () => {
     new ToggleComments(textEditor, CommentAction.COMMENT).doIt();
     checkCommonCalls();
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(5, 0, 6, 45),
       "      *01  WS-POINT.\n" +
         "      *    05 WS-POINTER USAGE    IS POINTER.",
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(14, 0, 14, 44),
       "      **    DISPLAY 'From P1:' BAR of FOOBAR.",
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(20, 0, 20, 33),
       '      *    "LLLLLLLLLLMMMMMMMMMM"',
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(25, 0, 25, 22),
       "      *  debug command",
     );
@@ -273,32 +293,73 @@ describe("Validate ToggleComments", () => {
   test("with uncomment action", () => {
     new ToggleComments(textEditor, CommentAction.UNCOMMENT).doIt();
     checkCommonCalls();
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(5, 0, 6, 45),
       "       01  WS-POINT.\n" +
         "           05 WS-POINTER USAGE    IS POINTER.",
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(14, 0, 14, 44),
       "           DISPLAY 'From P1:' BAR of FOOBAR.",
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(20, 0, 20, 33),
       '      -    "LLLLLLLLLLMMMMMMMMMM"',
     );
-    expect(editBuilder.replace).toBeCalledWith(
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
       getRange(25, 0, 25, 22),
       "      d  debug command",
     );
   });
 
+  test("toggle mixed selection", () => {
+    // selection[0]
+    // 4           >
+    // 5:       01  WS-POINT.
+    // 6:           05 WS-POINTER USAGE    IS POINTER.
+    // 7:                              <
+    // selection[1]
+    // 13:                  >
+    // 14:      *    DISPLAY 'From P1:' BAR of FOOBAR.
+    // 15:                             <
+    const mixedTextEditor = {
+      selections: [getRange(4, 12, 7, 25), getRange(13, 20, 15, 30)],
+      document: {
+        lineAt: jest.fn().mockImplementation(
+          (line: number) =>
+            documentLines[line] ?? {
+              text: "",
+              range: getRange(line, 0, line, 0),
+            },
+        ),
+        eol: vscode.EndOfLine.LF,
+      },
+      edit: jest
+        .fn()
+        .mockImplementation(
+          (callback: (param: vscode.TextEditorEdit) => void) =>
+            callback(TextEditorEdit),
+        ),
+    } as unknown as vscode.TextEditor;
+    new ToggleComments(mixedTextEditor, CommentAction.TOGGLE).doIt();
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
+      getRange(5, 0, 6, 45),
+      "      *01  WS-POINT.\n" +
+        "      *    05 WS-POINTER USAGE    IS POINTER.",
+    );
+    expect(TextEditorEdit.replace).toHaveBeenCalledWith(
+      getRange(14, 0, 14, 44),
+      "           DISPLAY 'From P1:' BAR of FOOBAR.",
+    );
+  });
+
   function checkCommonCalls() {
-    expect(textEditor.document.lineAt).toBeCalledTimes(5);
-    expect(textEditor.document.lineAt).toBeCalledWith(5);
-    expect(textEditor.document.lineAt).toBeCalledWith(6);
-    expect(textEditor.document.lineAt).toBeCalledWith(14);
-    expect(textEditor.edit).toBeCalledTimes(1);
-    expect(editBuilder.replace).toBeCalledTimes(4);
+    expect(textEditor.document.lineAt).toHaveBeenCalledTimes(5);
+    expect(textEditor.document.lineAt).toHaveBeenCalledWith(5);
+    expect(textEditor.document.lineAt).toHaveBeenCalledWith(6);
+    expect(textEditor.document.lineAt).toHaveBeenCalledWith(14);
+    expect(textEditor.edit).toHaveBeenCalledTimes(1);
+    expect(TextEditorEdit.replace).toHaveBeenCalledTimes(4);
   }
 });
 
@@ -307,15 +368,9 @@ function getRange(
   startCharacter: number,
   endLine: number,
   endCharacter: number,
-) {
-  return {
-    start: {
-      line: startLine,
-      character: startCharacter,
-    },
-    end: {
-      line: endLine,
-      character: endCharacter,
-    },
-  };
+): vscode.Range {
+  return new vscode.Range(
+    new vscode.Position(startLine, startCharacter),
+    new vscode.Position(endLine, endCharacter),
+  );
 }

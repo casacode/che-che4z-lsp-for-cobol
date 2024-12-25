@@ -12,9 +12,7 @@
  *   Broadcom, Inc. - initial API and implementation
  */
 
-import * as path from "node:path";
 import * as vscode from "vscode";
-import { FileType } from "vscode";
 import {
   CLEARING_COPYBOOK_CACHE,
   COPYBOOK_CACHE_CLEARED_INFO,
@@ -22,43 +20,47 @@ import {
   E4E_FOLDER,
   ZOWE_FOLDER,
 } from "../constants";
+import { hasMember } from "../services/util/Utils";
 
 /**
- * Clears the downloaded copybook cache folder ({globalStoragePath}/.zowe/.copybooks).
+ * Clears the downloaded copybook cache folder ({globalStoragePath}/zowe/copybooks).
  *
  */
 export function clearCache(uri: vscode.Uri) {
-  vscode.window.setStatusBarMessage(
-    CLEARING_COPYBOOK_CACHE,
-    Promise.resolve().then(
-      () => {
-        const zoweFileUri = uri.with({
-          path: path.join(uri.fsPath, ZOWE_FOLDER, COPYBOOKS_FOLDER),
-        });
-        const e4eFileUri = uri.with({
-          path: path.join(uri.fsPath, E4E_FOLDER, COPYBOOKS_FOLDER),
-        });
-        deleteFolderContent(vscode.Uri.file(zoweFileUri.fsPath));
-        deleteFolderContent(vscode.Uri.file(e4eFileUri.fsPath));
-        vscode.window.showInformationMessage(COPYBOOK_CACHE_CLEARED_INFO);
-      },
-      () =>
-        vscode.window.showInformationMessage(
-          "Encountered problem while clearing copybook cache",
-        ),
-    ),
-  );
+  const deletePromise = (async () => {
+    const zowe = await deleteFolderContent(
+      vscode.Uri.joinPath(uri, ZOWE_FOLDER, COPYBOOKS_FOLDER),
+    );
+    const e4e = await deleteFolderContent(
+      vscode.Uri.joinPath(uri, E4E_FOLDER, COPYBOOKS_FOLDER),
+    );
+    const results = await Promise.allSettled([...zowe, ...e4e]);
+    if (results.find((r) => r.status === "rejected"))
+      vscode.window.showInformationMessage(
+        "Encountered problem while clearing copybook cache",
+      );
+    else vscode.window.showInformationMessage(COPYBOOK_CACHE_CLEARED_INFO);
+  })();
+  vscode.window.setStatusBarMessage(CLEARING_COPYBOOK_CACHE, deletePromise);
+  return deletePromise;
 }
 
-function deleteFolderContent(fileUri: vscode.Uri) {
-  return vscode.workspace.fs
-    .readDirectory(fileUri)
-    .then((value: [string, FileType][]) => {
-      value.forEach((val) => {
-        vscode.workspace.fs.delete(
-          fileUri.with({ path: path.join(fileUri.fsPath, val[0]) }),
-          { recursive: true },
-        );
-      });
-    });
+async function deleteFolderContent(fileUri: vscode.Uri) {
+  let files: [string, vscode.FileType][] = [];
+  try {
+    files = await vscode.workspace.fs.readDirectory(fileUri);
+  } catch (err) {
+    if (hasMember(err, "code") && err.code === "FileNotFound") {
+      // directory doesn't exists - ignore
+    } else {
+      throw err;
+    }
+  }
+
+  return files.map(([name, _]) =>
+    vscode.workspace.fs.delete(vscode.Uri.joinPath(fileUri, name), {
+      recursive: true,
+      useTrash: false,
+    }),
+  );
 }

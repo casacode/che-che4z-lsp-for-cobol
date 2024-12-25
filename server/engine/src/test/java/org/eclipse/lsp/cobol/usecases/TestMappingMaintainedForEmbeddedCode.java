@@ -62,9 +62,9 @@ public class TestMappingMaintainedForEmbeddedCode {
           + "      *                                                                         \n"
           + "      *  some comments                                              \n"
           + "      *                                                                         \n"
-          + "                 EXEC CICS {LINK|1}                                                 \n"
-          + "                    PROGRAM(PGM)                                        \n"
-          + "                    DUMMY-CMD()                            \n"
+          + "                 EXEC CICS LINK                                                 \n"
+          + "                    PROGRAM({$PGM})                                        \n"
+          + "                    {DUMMY-CMD|1}()                        \n"
           + "                    SYNCONRETURN                                                \n"
           + "                 END-EXEC                                                       \n"
           + "                                                                      \n"
@@ -117,7 +117,7 @@ public class TestMappingMaintainedForEmbeddedCode {
             "1",
             new Diagnostic(
                 new Range(),
-                "Extraneous input 'LINK'",
+                "Extraneous input DUMMY-CMD",
                 Error,
                 ErrorSource.PARSING.getText())));
   }
@@ -130,6 +130,6 @@ public class TestMappingMaintainedForEmbeddedCode {
         ImmutableMap.of(
             "1",
             new Diagnostic(
-                new Range(), "Syntax error on 'PERFORM'", Error, ErrorSource.PARSING.getText())));
+                new Range(), "Syntax error on 'PERFORM'", Error, ErrorSource.PREPROCESSING.getText())));
   }
 }

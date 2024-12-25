@@ -14,7 +14,6 @@
 import * as path from "node:path";
 import { COPYBOOKS_FOLDER, ZOWE_FOLDER } from "../../constants";
 import { SettingsService } from "../Settings";
-import { getProgramNameFromUri } from "../util/FSUtils";
 import { ProfileUtils } from "../util/ProfileUtils";
 import { EndevorType, ResolvedProfile } from "../../type/e4eApi.d";
 import { Utils } from "../util/Utils";
@@ -55,18 +54,21 @@ export class CopybookURI {
   }
   /**
    * This method produce an array with element that following the schema
-   * "file://[EXTENSION_FOLDER]/.zowe/.copybooks/PROFILE/DATASET" or
-   * "file://[EXTENSION_FOLDER]/.zowe/.copybooks/PROFILE/USS"
-   * @param profile represent a name of a folder within the .copybooks folder that have the same name as the
+   * "file://[EXTENSION_FOLDER]/zowe/copybooks/PROFILE/DATASET" or
+   * "file://[EXTENSION_FOLDER]/zowe/copybooks/PROFILE/USS"
+   * @param profile represent a name of a folder within the copybooks folder that have the same name as the
    * connection name needed to download copybooks from mainframe.
    */
-  public static async createPathForCopybookDownloaded(
+  public static createPathForCopybookDownloaded(
     documentUri: string,
     dialectType: string,
     downloadFolder: string,
-  ): Promise<string[]> {
-    const filename = getProgramNameFromUri(documentUri, true);
-    const profile = await ProfileUtils.getProfileNameForCopybook(filename);
+    zoweExplorerApi: IApiRegisterClient | undefined,
+  ): string[] {
+    const profile = ProfileUtils.getProfileNameForCopybook(
+      documentUri,
+      zoweExplorerApi,
+    );
 
     let result: string[] = [];
     const datasets: string[] = SettingsService.getDsnPath(

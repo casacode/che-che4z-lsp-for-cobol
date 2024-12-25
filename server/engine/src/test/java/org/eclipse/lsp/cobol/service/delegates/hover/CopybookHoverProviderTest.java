@@ -16,13 +16,11 @@ package org.eclipse.lsp.cobol.service.delegates.hover;
 
 import org.eclipse.lsp.cobol.lsp.SourceUnitGraph;
 import org.eclipse.lsp.cobol.service.CobolDocumentModel;
-import org.eclipse.lsp.cobol.service.UriDecodeService;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.TextDocumentPositionParams;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
@@ -36,13 +34,11 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class CopybookHoverProviderTest {
-    @Mock
-    private UriDecodeService uriDecodeService;
     private CopybookHoverProvider copybookHoverProvider;
 
     @BeforeEach
     void setUp() {
-        copybookHoverProvider = new CopybookHoverProvider(uriDecodeService);
+        copybookHoverProvider = new CopybookHoverProvider();
     }
 
     @Test
@@ -52,7 +48,7 @@ class CopybookHoverProviderTest {
         SourceUnitGraph sourceUnitGraph = mock(SourceUnitGraph.class);
         copybookHoverProvider.getHover(mock(CobolDocumentModel.class), position, sourceUnitGraph);
 
-        verify(sourceUnitGraph, times(1)).isCopybook(any());
+        verify(sourceUnitGraph, times(1)).isUserSuppliedCopybook(any());
     }
 
     @Test
@@ -60,7 +56,7 @@ class CopybookHoverProviderTest {
         TextDocumentPositionParams position = mock(TextDocumentPositionParams.class);
         when(position.getTextDocument()).thenReturn(mock(TextDocumentIdentifier.class));
         SourceUnitGraph sourceUnitGraph = mock(SourceUnitGraph.class);
-        when(sourceUnitGraph.isCopybook(any())).thenReturn(true);
+        when(sourceUnitGraph.isUserSuppliedCopybook(any())).thenReturn(true);
         SourceUnitGraph.NodeV nodeV = mock(SourceUnitGraph.NodeV.class);
         List<SourceUnitGraph.NodeV> containedCopybookNode =  new ArrayList<>();
         containedCopybookNode.add(nodeV);

@@ -20,13 +20,17 @@ suite("Integration Test Suite: Processor Groups", function () {
   this.timeout(helper.TEST_TIMEOUT);
   this.slow(1000);
   suiteSetup(async function () {
-    helper.updateConfig("basic.json");
+    await helper.updateConfig("basic.json");
     await helper.activate();
   });
 
-  this.beforeEach(async () => {
+  this.afterEach(async () => {
     await helper.closeAllEditors();
   });
+
+  this.afterAll(async () => await helper.closeAllEditors()).timeout(
+    helper.TEST_TIMEOUT,
+  );
 
   // cobol-dialect-api (development) npm ci && npm run compile
   // daco-dialect-support (development) npm ci && npm run package

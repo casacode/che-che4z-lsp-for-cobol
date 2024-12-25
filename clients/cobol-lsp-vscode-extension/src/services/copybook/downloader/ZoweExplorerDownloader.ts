@@ -12,15 +12,20 @@
  *   Broadcom, Inc. - initial API and implementation
  */
 import * as vscode from "vscode";
-import { DownloadUtil } from "./DownloadUtil";
 import * as iconv from "iconv-lite";
 import { SettingsService } from "../../Settings";
 import { CopybookURI } from "../CopybookURI";
+import { getErrorMessage } from "../../util/ErrorsUtils";
 
 export abstract class ZoweExplorerDownloader {
   public static profileStore: Map<string, "locked-profile" | "valid-profile"> =
     new Map();
   protected memberListCache: Map<string, string[]> = new Map();
+  private ZoweDownloadQueue = new Map<string, Promise<boolean>>();
+
+  public clearZoweDownloadQueue() {
+    this.ZoweDownloadQueue.clear();
+  }
 
   constructor(
     private readonly storagePath: string,
@@ -31,7 +36,7 @@ export abstract class ZoweExplorerDownloader {
     dataset: string,
     member: string,
     profileName: string,
-  ): Promise<void>;
+  ): Promise<boolean>;
 
   protected getDownloadOptions(
     profileName: string,
@@ -39,39 +44,39 @@ export abstract class ZoweExplorerDownloader {
     member: string,
     loadedProfile: IProfileLoaded,
   ) {
-    const downloadBinary = !!SettingsService.getCopybookFileEncoding();
+    const copybookEncoding = SettingsService.getCopybookFileEncoding();
     const baseUri = vscode.Uri.file(
       CopybookURI.createDatasetPath(profileName, dataset, this.storagePath),
     );
-    const filePath = vscode.Uri.joinPath(baseUri, member);
-    const encoding = downloadBinary
-      ? SettingsService.getCopybookFileEncoding()
-      : loadedProfile.profile.encoding;
+    const fileUri = vscode.Uri.joinPath(baseUri, member);
     return {
-      file: filePath,
-      binary: downloadBinary,
-      returnEtag: true,
-      encoding,
+      apiOptions: {
+        file: fileUri.fsPath,
+        returnEtag: true,
+        ...(copybookEncoding
+          ? { binary: true }
+          : { encoding: loadedProfile.profile.encoding }),
+      },
+      fileUri,
+      decode: copybookEncoding,
     };
   }
 
-  protected async encodeDownloadedContent(
+  protected async decodeBinaryContent(
     filePath: vscode.Uri,
-    encoding: string | undefined,
+    encoding: string,
     insertNewLineOn80Char: boolean = false,
   ) {
     const fileContents = await vscode.workspace.fs.readFile(filePath);
-    if (encoding) {
-      let newContent = iconv.decode(Buffer.from(fileContents), encoding);
+    let newContent = iconv.decode(Buffer.from(fileContents), encoding);
 
-      if (insertNewLineOn80Char) {
-        // Based on assumption - Most of source code on z/OS is 80 characters per record - JCL, HLASM, COBOL
-        // Can be exposed later on as a setting.
-        newContent = newContent.replace(/.{80}/g, `$&\n`);
-      }
-      const writeData = Buffer.from(newContent, "utf8");
-      await vscode.workspace.fs.writeFile(filePath, writeData);
+    if (insertNewLineOn80Char) {
+      // Based on assumption - Most of source code on z/OS is 80 characters per record - JCL, HLASM, COBOL
+      // Can be exposed later on as a setting.
+      newContent = newContent.replace(/.{80}/g, `$&\n`);
     }
+    const writeData = Buffer.from(newContent, "utf8");
+    await vscode.workspace.fs.writeFile(filePath, writeData);
   }
 
   protected async downloadCopybookFromMFUsingZowe(
@@ -86,16 +91,21 @@ export abstract class ZoweExplorerDownloader {
       this.storagePath,
     );
 
-    if (!(await DownloadUtil.checkPathExists(copybookPath))) {
-      try {
-        await this.downloadCopybookContent(dataset, member, profileName);
-        return true;
-      } catch (err: any) {
-        vscode.window.showErrorMessage(err.message);
-      }
+    const queueResponse = this.ZoweDownloadQueue.get(copybookPath);
+    if (queueResponse) {
+      return queueResponse;
     }
-
-    return false;
+    const response = this.downloadCopybookContent(dataset, member, profileName)
+      .catch((err: unknown) => {
+        const message = getErrorMessage(err);
+        vscode.window.showErrorMessage(
+          message ?? "Unable to download copybook",
+        );
+        return false;
+      })
+      .finally(() => this.ZoweDownloadQueue.delete(copybookPath));
+    this.ZoweDownloadQueue.set(copybookPath, response);
+    return response;
   }
 
   protected createId(profileName: string, path: string) {

@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.apache.commons.lang3.tuple.Pair;
+import org.eclipse.lsp.cobol.AntlrRangeUtils;
 import org.eclipse.lsp.cobol.common.CleanerPreprocessor;
 import org.eclipse.lsp.cobol.common.ResultWithErrors;
 import org.eclipse.lsp.cobol.common.copybook.*;
@@ -42,7 +43,6 @@ import org.eclipse.lsp.cobol.core.preprocessor.delegates.replacement.Replacement
 import org.eclipse.lsp.cobol.core.preprocessor.delegates.replacement.ReplacingService;
 import org.eclipse.lsp.cobol.core.preprocessor.delegates.util.LocalityUtils;
 import org.eclipse.lsp.cobol.core.semantics.CopybooksRepository;
-import org.eclipse.lsp.cobol.core.visitor.VisitorHelper;
 import org.eclipse.lsp4j.Location;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
@@ -99,9 +99,7 @@ class CopybookPreprocessorService {
                           int maxCopybookLen, List<ReplacementContext> replacementContext) {
     CopybookName name = getCopybookName(copySource);
     String copybookName = name.getQualifiedName();
-    String copybookId = name.toCopybookId(programDocumentUri).toString();
 
-    Range range = VisitorHelper.constructRange(ctx);
     Locality nameLocality = mapLocality(retrieveLocality(copySource));
     Locality statementLocality = mapLocality(retrieveLocality(ctx));
 
@@ -115,7 +113,7 @@ class CopybookPreprocessorService {
         List<SyntaxError> hierarchyErrors = hierarchy.mapCopybooks(cu -> copybookErrorService.addRecursionError(name.getQualifiedName(), cu.getLocality()));
         hierarchyErrors.add(copybookErrorService.addRecursionError(name.getQualifiedName(), statementLocality));
         errors.addAll(hierarchyErrors);
-        currentDocument.clear(VisitorHelper.constructRange(ctx));
+        currentDocument.clear(AntlrRangeUtils.constructRange(ctx));
         copybooks.define(copybookName, null, currentDocument.getUri(), copybook.getUri());
         return;
       }
@@ -124,6 +122,7 @@ class CopybookPreprocessorService {
       prepareReplacements(ctx);
       ExtendedDocument copybookDocument = processCopybookWithReplacement(replacementContext, copybook, nameLocality);
 
+      Range range = AntlrRangeUtils.constructRange(ctx);
       if (firstInstruction(currentDocument, range.getStart())) {
         currentDocument.insertCopybook(range, copybookDocument.getCurrentText());
       } else {
@@ -131,7 +130,7 @@ class CopybookPreprocessorService {
       }
       copybooks.define(copybookName, null, currentDocument.getUri(), copybook.getUri());
     } else {
-      currentDocument.clear(VisitorHelper.constructRange(ctx));
+      currentDocument.clear(AntlrRangeUtils.constructRange(ctx));
       errors.add(copybookErrorService.addMissingCopybook(name.getQualifiedName(), nameLocality));
     }
   }
@@ -218,17 +217,7 @@ class CopybookPreprocessorService {
     if (start.getCharacter() < 7) {
       return true;
     }
-    String text = extendedDocument.toString();
-    String[] lines = text.split("\\r?\\n");
-    if (lines.length <= start.getLine()) {
-      return true;
-    }
-    String line = lines[start.getLine()];
-    if (line.length() < 7) {
-      return true;
-    }
-    line = line.substring(7, Math.min(start.getCharacter(), line.length()));
-    return line.trim().isEmpty();
+    return extendedDocument.isLineEmptyBetweenColumns(start.getLine(), 7, start.getCharacter());
   }
 
   private CopybookName getCopybookName(CobolPreprocessor.CopySourceContext ctx) {
@@ -255,7 +244,8 @@ class CopybookPreprocessorService {
   }
 
   void replaceWithSpaces(ParserRuleContext ctx) {
-    Range range = VisitorHelper.constructRange(ctx);
-    currentDocument.replace(range, org.apache.commons.lang3.StringUtils.rightPad(" ", range.getEnd().getCharacter() - range.getStart().getCharacter()));
+    Range range = AntlrRangeUtils.constructRange(ctx);
+    int size = ctx.getStop().getStopIndex() - ctx.getStart().getStartIndex() + 1;
+    currentDocument.replace(range, org.apache.commons.lang3.StringUtils.rightPad(" ", size));
   }
 }

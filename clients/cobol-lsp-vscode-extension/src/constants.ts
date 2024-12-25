@@ -33,7 +33,7 @@ export const PATHS_DSN = "paths-dsn";
 export const PATHS_USS = "paths-uss";
 export const COBOL_PRGM_LAYOUT = "cobol-lsp.cobol.program.layout";
 export const C4Z_FOLDER: string = ".c4z";
-export const COPYBOOKS_FOLDER: string = ".copybooks";
+export const COPYBOOKS_FOLDER: string = "copybooks";
 export const GITIGNORE_FILE: string = ".gitignore";
 export const LANGUAGE_ID = "cobol";
 export const EXP_LANGUAGE_ID = "expcobol";
@@ -57,26 +57,33 @@ export const COBOL_CBL_EXT = ".CBL";
 export const COBOL_COB_EXT = ".COB";
 export const COBOL_COBOL_EXT = ".COBOL";
 export const COBOL_EXT_ARRAY = [COBOL_CBL_EXT, COBOL_COB_EXT, COBOL_COBOL_EXT];
+export const COBOL_EXT_ARRAY_CASE_INSENSITIVE = [
+  ...COBOL_EXT_ARRAY,
+  ...COBOL_EXT_ARRAY.map((s) => s.toLowerCase()),
+];
 export const COPYBOOK_CPY_EXT = ".CPY";
 export const COPYBOOK_EXTENSIONS = "copybook-extensions";
 export const COPYBOOK_EXT_ARRAY = [COPYBOOK_CPY_EXT];
 export const EXTENSION_ID = "broadcommfd.cobol-language-support";
-export const TELEMETRY_DEFAULT_CONTENT = "INVALID_INSTRUMENTATION_KEY";
+export const TELEMETRY_DEFAULT_CONTENT = "";
 export const ZOWE_EXT_MISSING_MSG =
   "Zowe Explorer version 1.15.0 or higher is required to download copybooks from the mainframe.";
 export const INSTALL_ZOWE = "Install Zowe Explorer";
 export const DEFAULT_DIALECT = "COBOL";
 export const CLEARING_COPYBOOK_CACHE = "Clearing downloaded copybook cache";
 export const COPYBOOK_CACHE_CLEARED_INFO = "Downloaded copybooks removed";
-export const ZOWE_FOLDER: string = ".zowe";
+export const ZOWE_FOLDER: string = "zowe";
 export const FAIL_CREATE_COPYBOOK_FOLDER_MSG = `Failed to create copybook internal folder`;
 export const FAIL_CREATE_GLOBAL_STORAGE_MSG = `Failed to create extension global storage folder`;
 export const E4E_SCHEME: string = "ndvr";
 export const OUTPUT_MSG_SEARCH_LOCATION = "Looking for location => ";
-export const E4E_FOLDER: string = ".e4e";
+export const E4E_FOLDER: string = "e4e";
 export const DATASET = "dataset";
 export const ENVIRONMENT = "environment";
 export const USE_MAP = "MAP";
+export const SETTINGS_CPY_NDVR_DEPENDENCIES = "endevor-dependencies";
+export const ENDEVOR_PROCESSOR = "ENDEVOR_PROCESSOR";
+export const E4E_INCOMPATIBLE = "E4E interface is not compatible";
 
 export enum PUNCH_CARD {
   SEQUENCE_AREA_END_POS = 6,

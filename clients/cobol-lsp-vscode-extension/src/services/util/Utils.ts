@@ -13,12 +13,55 @@
  */
 
 import * as vscode from "vscode";
-import { E4E, ResolvedProfile } from "../../type/e4eApi";
+import { ResolvedProfile } from "../../type/e4eApi";
+
+async function safeActivate(ext: vscode.Extension<unknown>) {
+  try {
+    return await ext.activate();
+  } catch (_) {
+    // ignored
+  }
+}
+
+async function extractApi<T>(
+  ext: vscode.Extension<unknown>,
+  validate: (api: unknown) => api is T,
+): Promise<T | undefined> {
+  const api = ext.isActive ? ext.exports : await safeActivate(ext);
+  if (!validate(api)) return undefined;
+  return api;
+}
+
+function asAPI<T>(api: T | undefined) {
+  if (api) return { api };
+  return undefined;
+}
+
+export async function getExtensionApi<T>(
+  extName: string,
+  validate: (api: unknown) => api is T,
+): Promise<
+  undefined | { api: T } | { futureApi: Promise<undefined | { api: T }> }
+> {
+  const ext = vscode.extensions.getExtension(extName);
+  if (ext) {
+    return asAPI<T>(await extractApi(ext, validate));
+  }
+  return {
+    futureApi: new Promise((res, _) => {
+      const extAdded = vscode.extensions.onDidChange(() => {
+        const ext = vscode.extensions.getExtension(extName);
+        if (!ext) return;
+        extAdded.dispose();
+        void extractApi<T>(ext, validate).then((api) => res(asAPI<T>(api)));
+      });
+    }),
+  };
+}
 
 /**
  * This class collects utility methods for general purpose activities
  */
-const nameof = <T>(name: keyof T) => name;
 export class Utils {
   /**
    * This method provides a quick way to verify if the input is null or undefined.
@@ -35,24 +78,14 @@ export class Utils {
    *  Ref : https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/62e862f4-2a51-452e-8eeb-dc4ff5ee33cc?redirectedfrom=MSDN
    */
   private static UNC_PATH_REGEX =
+    // eslint-disable-next-line no-control-regex, no-useless-escape
     /^\\\\([^\\:\|\[\]\/";<>+=,?* _]+)\\([\u0020-\u0021\u0023-\u0029\u002D-\u002E\u0030-\u0039\u0040-\u005A\u005E-\u007B\u007E-\u00FF]{1,80})(((?:\\[\u0020-\u0021\u0023-\u0029\u002D-\u002E\u0030-\u0039\u0040-\u005A\u005E-\u007B\u007E-\u00FF]{1,255})+?|)(?:\\((?:[\u0020-\u0021\u0023-\u0029\u002B-\u002E\u0030-\u0039\u003B\u003D\u0040-\u005B\u005D-\u007B]{1,255}){1}(?:\:(?=[\u0001-\u002E\u0030-\u0039\u003B-\u005B\u005D-\u00FF]|\:)(?:([\u0001-\u002E\u0030-\u0039\u003B-\u005B\u005D-\u00FF]+(?!\:)|[\u0001-\u002E\u0030-\u0039\u003B-\u005B\u005D-\u00FF]*)(?:\:([\u0001-\u002E\u0030-\u0039\u003B-\u005B\u005D-\u00FF]+)|))|)))|)$/;
 
-  public static async getZoweExplorerAPI(): Promise<
-    IApiRegisterClient | undefined
-  > {
-    const extension = vscode.extensions.getExtension(
+  public static async getZoweExplorerAPI() {
+    return getExtensionApi<IApiRegisterClient>(
       "Zowe.vscode-extension-for-zowe",
+      (api: unknown): api is IApiRegisterClient => !!api,
     );
-    if (!extension) {
-      return undefined;
-    }
-
-    try {
-      await extension.activate();
-      return extension.exports as IApiRegisterClient;
-    } catch {
-      return undefined;
-    }
   }
 
   /**
@@ -63,22 +96,15 @@ export class Utils {
   public static isUNCPath(path: string) {
     return this.UNC_PATH_REGEX.test(path);
   }
-  public static validateE4E(e4e: any): e4e is E4E {
-    const valid =
-      e4e instanceof Object &&
-      nameof<E4E>("listElements") in e4e &&
-      nameof<E4E>("getElement") in e4e &&
-      nameof<E4E>("listMembers") in e4e &&
-      nameof<E4E>("getMember") in e4e &&
-      nameof<E4E>("isEndevorElement") in e4e &&
-      nameof<E4E>("getProfileInfo") in e4e &&
-      nameof<E4E>("getConfiguration") in e4e &&
-      nameof<E4E>("onDidChangeElement") in e4e;
-    if (!valid) throw Error("incompatible interface");
-    return valid;
-  }
 
   public static profileAsString(profile: ResolvedProfile) {
     return `${profile.instance}.${profile.profile}`;
   }
+}
+
+export function hasMember<
+  M extends PropertyKey,
+  T extends object = { [K in M]: unknown },
+>(e: unknown, m: M): e is T {
+  return typeof e === "object" && e !== null && m in e;
 }

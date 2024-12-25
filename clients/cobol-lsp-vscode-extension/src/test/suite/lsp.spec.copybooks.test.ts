@@ -21,7 +21,7 @@ import * as path from "path";
 suite("Integration Test Suite: Copybooks", function () {
   suiteSetup(async function () {
     this.timeout(0);
-    helper.updateConfig("basic.json");
+    await helper.updateConfig("basic.json");
     await helper.activate();
   });
 
@@ -29,11 +29,13 @@ suite("Integration Test Suite: Copybooks", function () {
     helper.TEST_TIMEOUT,
   );
 
+  this.afterAll(async () => await helper.closeAllEditors()).timeout(
+    helper.TEST_TIMEOUT,
+  );
+
   test("TC174655: Copybook - Nominal", async () => {
-    await helper.showDocument("USERC1N1.cbl");
-    const editor = helper.get_editor("USERC1N1.cbl");
-    await helper.waitForDiagnostics(editor.document.uri);
-    const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+    const editor = await helper.showDocument("USERC1N1.cbl");
+    const diagnostics = await helper.waitForDiagnostics(editor.document.uri);
     assert.strictEqual(
       diagnostics[0].severity,
       vscode.DiagnosticSeverity.Error,
@@ -44,10 +46,8 @@ suite("Integration Test Suite: Copybooks", function () {
     .slow(1000);
 
   test("TC174657: Copybook - not exist: no syntax ok message", async () => {
-    await helper.showDocument("USERC1F.cbl");
-    const editor = helper.get_editor("USERC1F.cbl");
-    await helper.waitForDiagnostics(editor.document.uri);
-    const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+    const editor = await helper.showDocument("USERC1F.cbl");
+    const diagnostics = await helper.waitForDiagnostics(editor.document.uri);
     assert.strictEqual(
       diagnostics[0].severity,
       vscode.DiagnosticSeverity.Error,
@@ -58,10 +58,8 @@ suite("Integration Test Suite: Copybooks", function () {
     .slow(1000);
 
   test("TC174658, TC174658: Copybook - not exist: error underlying and detailed hint", async () => {
-    await helper.showDocument("USERC1F.cbl");
-    const editor = helper.get_editor("USERC1F.cbl");
-    await helper.waitForDiagnostics(editor.document.uri);
-    const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+    const editor = await helper.showDocument("USERC1F.cbl");
+    const diagnostics = await helper.waitForDiagnostics(editor.document.uri);
     assert.strictEqual(diagnostics.length, 3);
     helper.assertRangeIsEqual(
       diagnostics[0].range,
@@ -73,10 +71,8 @@ suite("Integration Test Suite: Copybooks", function () {
     .slow(1000);
 
   test("TC174916/TC174917 Copybook - recursive error and detailed hint", async () => {
-    await helper.showDocument("USERC1R.cbl");
-    const editor = helper.get_editor("USERC1R.cbl");
-    await helper.waitForDiagnostics(editor.document.uri);
-    const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+    const editor = await helper.showDocument("USERC1R.cbl");
+    const diagnostics = await helper.waitForDiagnostics(editor.document.uri);
     assert.strictEqual(diagnostics.length, 3);
     helper.assertRangeIsEqual(
       diagnostics[0].range,
@@ -91,10 +87,8 @@ suite("Integration Test Suite: Copybooks", function () {
     .slow(1000);
 
   test("TC174932/TC174933 Copybook - invalid definition and hint", async () => {
-    await helper.showDocument("USERC1N2.cbl");
-    const editor = helper.get_editor("USERC1N2.cbl");
-    await helper.waitForDiagnostics(editor.document.uri);
-    const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+    const editor = await helper.showDocument("USERC1N2.cbl");
+    const diagnostics = await helper.waitForDiagnostics(editor.document.uri);
     assert.strictEqual(diagnostics.length, 4);
     helper.assertRangeIsEqual(
       diagnostics[3].range,
@@ -110,9 +104,8 @@ suite("Integration Test Suite: Copybooks", function () {
 
   test("TC174952 Copybook - not exist, but dynamically appears", async () => {
     await helper.showDocument("VAR.cbl");
-    let editor = helper.get_editor("VAR.cbl");
-    await helper.waitForDiagnostics(editor.document.uri);
-    const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+    const editor = helper.getEditor("VAR.cbl");
+    const diagnostics = await helper.waitForDiagnostics(editor.document.uri);
     assert.strictEqual(diagnostics.length, 2);
     helper.assertRangeIsEqual(
       diagnostics[0].range,
@@ -136,9 +129,8 @@ suite("Integration Test Suite: Copybooks", function () {
 
   test("TC174952 / TC174953 Copybook - definition not exist, but dynamically appears", async () => {
     await helper.showDocument("USERC1F.cbl");
-    let editor = helper.get_editor("USERC1F.cbl");
-    await helper.waitForDiagnostics(editor.document.uri);
-    let diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+    const editor = helper.getEditor("USERC1F.cbl");
+    const diagnostics = await helper.waitForDiagnostics(editor.document.uri);
     helper.assertRangeIsEqual(
       diagnostics[2].range,
       new vscode.Range(pos(41, 29), pos(41, 46)),
@@ -171,7 +163,7 @@ suite("Integration Test Suite: Copybooks", function () {
     .timeout(helper.TEST_TIMEOUT)
     .slow(1000);
 
-  test("TC247497 - Local Copybooks - check hidden folders under c4z", async () => {
+  test("TC247497 - Local Copybooks - check hidden folders under c4z", () => {
     const extSrcPath = path.join(getWorkspacePath(), ".c4z", ".extsrcs");
     const extSrcUri = vscode.Uri.file(extSrcPath);
     const hiddenFolder = vscode.workspace.getWorkspaceFolder(extSrcUri);

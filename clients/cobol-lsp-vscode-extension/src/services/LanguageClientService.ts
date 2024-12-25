@@ -92,16 +92,29 @@ export class LanguageClientService {
     );
   }
 
-  public async retrieveAnalysis(uri: string, text: string): Promise<any> {
+  public async retrieveAnalysis(
+    uri: string,
+    text: string,
+    position: vscode.Position,
+  ) {
+    const params = {
+      uri,
+      text,
+      line: position.line,
+      character: position.character,
+    };
     const languageClient = this.getLanguageClient();
-    return languageClient.sendRequest("extended/analysis", { uri, text });
+    return languageClient.sendRequest("extended/analysis", params);
   }
 
-  public invalidateConfiguration() {
+  public async invalidateConfiguration() {
     const languageClient = this.getLanguageClient();
-    languageClient.sendNotification(DidChangeConfigurationNotification.type, {
-      settings: null,
-    });
+    await languageClient.sendNotification(
+      DidChangeConfigurationNotification.type,
+      {
+        settings: null,
+      },
+    );
   }
 
   public async start() {

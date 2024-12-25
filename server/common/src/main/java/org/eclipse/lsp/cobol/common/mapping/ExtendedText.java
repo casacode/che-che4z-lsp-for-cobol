@@ -110,7 +110,7 @@ public class ExtendedText {
   }
 
   private ExtendedTextLine updateLine(ExtendedTextLine textLine, Location initialLocation) {
-    textLine.getCharacters().forEach(c -> c.getInitialLocationMap().put(uri, initialLocation));
+    textLine.getCharacters().forEach(c -> c.getOrCreateInitialLocationMap().put(uri, initialLocation));
     return textLine;
   }
 
@@ -162,7 +162,9 @@ public class ExtendedText {
       ExtendedTextLine copybookLine = copybook.lines.get(0);
       ExtendedTextLine firstLine = lines.get(initialLine);
       copybookLine.trim();
-      firstLine.insert(copyStatementRange.getEnd().getCharacter(), updateLine(copybookLine, initialLocation));
+
+      delete(copyStatementRange);
+      firstLine.insert(copyStatementRange.getStart().getCharacter(), updateLine(copybookLine, initialLocation));
 
       for (int i = 1; i < copybook.lines.size() - 1; i++) {
         copybookLine = copybook.lines.get(i);
@@ -191,13 +193,15 @@ public class ExtendedText {
    * @param range - a range of text
    */
   public void delete(Range range) {
-    if (range.getStart().getLine() == range.getEnd().getLine()) {
-      lines.get(range.getStart().getLine()).delete(range.getStart().getCharacter(), range.getEnd().getCharacter());
+    Position start = range.getStart();
+    Position end = range.getEnd();
+    if (start.getLine() == end.getLine()) {
+      lines.get(start.getLine()).delete(start.getCharacter(), end.getCharacter());
     } else {
-      lines.get(range.getStart().getLine()).trim(range.getStart().getCharacter());
-      lines.get(range.getEnd().getLine()).delete(0, range.getEnd().getCharacter());
-      if (range.getStart().getLine() + 1 <= range.getEnd().getLine() - 1) {
-        lines.subList(range.getStart().getLine() + 1, range.getEnd().getLine()).clear();
+      lines.get(start.getLine()).trim(start.getCharacter());
+      lines.get(end.getLine()).delete(0, end.getCharacter());
+      if (start.getLine() + 1 <= end.getLine() - 1) {
+        lines.subList(start.getLine() + 1, end.getLine()).clear();
       }
     }
   }
@@ -235,15 +239,36 @@ public class ExtendedText {
    */
   public void clear(Range range) {
     if (range.getStart().getLine() == range.getEnd().getLine()) {
-      lines.get(range.getStart().getLine()).clear(range.getStart().getCharacter(), range.getEnd().getCharacter());
+      lines.get(range.getStart().getLine())
+              .clear(range.getStart().getCharacter(), range.getEnd().getCharacter());
     } else {
       ExtendedTextLine line = lines.get(range.getStart().getLine());
-      line.clear(range.getStart().getCharacter(), line.size() - 1);
+      line.clear(range.getStart().getCharacter(), line.size());
 
       if (range.getStart().getLine() + 1 <= range.getEnd().getLine() - 1) {
         lines.subList(range.getStart().getLine() + 1, range.getEnd().getLine()).forEach(ExtendedTextLine::clear);
       }
       lines.get(range.getEnd().getLine()).clear(0, range.getEnd().getCharacter());
+    }
+  }
+
+  /**
+   * Replace range with character
+   * @param range - a range to clear
+   */
+  public void fillArea(Range range, char c) {
+    Position start = range.getStart();
+    Position end = range.getEnd();
+    if (start.getLine() == end.getLine()) {
+      lines.get(start.getLine()).fillArea(start.getCharacter(), end.getCharacter(), c);
+    } else {
+      ExtendedTextLine line = lines.get(start.getLine());
+      line.fillArea(start.getCharacter(), line.size(), c);
+
+      if (start.getLine() + 1 <= end.getLine() - 1) {
+        lines.subList(start.getLine() + 1, end.getLine()).forEach((l) -> l.fillLine(c));
+      }
+      lines.get(end.getLine()).fillArea(0, end.getCharacter(), c);
     }
   }
 

@@ -12,32 +12,45 @@
  *   Broadcom, Inc. - initial API and implementation
  */
 import * as vscode from "vscode";
-import { E4ECopybookService } from "../../../services/copybook/E4ECopybookService";
+import { getE4EAPI } from "../../../services/copybook/E4ECopybookService";
 import { e4eMock } from "../../../__mocks__/getE4EMock.utility";
-import { Utils } from "../../../services/util/Utils";
+import { E4E } from "../../../type/e4eApi";
 
 describe("e4e copybook service tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
   it("checks valid e4e api retrieved", async () => {
-    const ext = { exports: { ...e4eMock }, activate: jest.fn() };
+    const exports = { ...e4eMock };
+    const ext = { exports, activate: jest.fn().mockReturnValue(exports) };
     vscode.extensions.getExtension = jest.fn().mockReturnValue(ext);
 
-    const spyValidate = jest.spyOn(Utils, "validateE4E");
-    const api = await E4ECopybookService.getE4EAPI();
-    expect(spyValidate).toHaveBeenCalled();
-    expect(api).toEqual(e4eMock);
+    const api = await getE4EAPI();
+    expect(api).toEqual({ api: e4eMock });
   });
+  it("e4e installed later on", async () => {
+    const exports = { ...e4eMock };
+    const getExtension = jest.fn();
+    const dispose = jest.fn();
+    let changeCallback: unknown;
+    vscode.extensions.getExtension = getExtension;
+    jest.spyOn(vscode.extensions, "onDidChange").mockImplementation((fn) => {
+      changeCallback = fn;
+      return { dispose };
+    });
 
-  it("check getE4EClient assembles client correctly / check getE4EClient returns already assembled client once called with same Uri ", async () => {
-    E4ECopybookService.getE4EAPI = jest.fn().mockReturnValue(e4eMock);
-    await E4ECopybookService.getE4EClient("document-uri");
-    const spyApi = jest.spyOn(E4ECopybookService, "getE4EAPI");
-    expect(spyApi).toHaveBeenCalledTimes(1);
-    await E4ECopybookService.getE4EClient("document-uri");
-    expect(spyApi).toHaveBeenCalledTimes(1);
-    await E4ECopybookService.getE4EClient("new-uri");
-    expect(spyApi).toHaveBeenCalledTimes(2);
+    const api = await getE4EAPI();
+    expect(api).toHaveProperty("futureApi");
+    expect(changeCallback).toBeTruthy();
+    const { futureApi } = api as {
+      futureApi: Promise<undefined | { api: E4E }>;
+    };
+
+    // e4e has now been installed
+    const ext = { exports, activate: jest.fn().mockReturnValue(exports) };
+    getExtension.mockReturnValue(ext);
+    (changeCallback as () => void)(); // typescript does not see through the indirect call
+
+    expect(await futureApi).toEqual({ api: e4eMock });
   });
 });

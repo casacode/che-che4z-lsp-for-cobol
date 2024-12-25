@@ -29,13 +29,14 @@ export class CopybookDownloaderForDsn extends ZoweExplorerDownloader {
    * @param documentUri cobol programs which needs copybook
    * @param dsnPath dsnpath in mainframe.
    */
-  async isEligibleForDownload(
+  isEligibleForDownload(
     _copybookName: CopybookName,
     documentUri: string,
     dsnPath: string | undefined,
-  ): Promise<boolean> {
-    const providedProfile = await ProfileUtils.getProfileNameForCopybook(
+  ): boolean {
+    const providedProfile = ProfileUtils.getProfileNameForCopybook(
       documentUri,
+      this.explorerAPI,
     );
     return !!(dsnPath && providedProfile);
   }
@@ -52,11 +53,12 @@ export class CopybookDownloaderForDsn extends ZoweExplorerDownloader {
     documentUri: string,
     dsnPath: string,
   ): Promise<boolean> {
-    const providedProfile = await ProfileUtils.getProfileNameForCopybook(
+    const providedProfile = ProfileUtils.getProfileNameForCopybook(
       documentUri,
+      this.explorerAPI,
     );
 
-    if (await this.isEligibleForDownload(copybookName, documentUri, dsnPath)) {
+    if (this.isEligibleForDownload(copybookName, documentUri, dsnPath)) {
       const memberList = await this.getAllMembers(providedProfile!, dsnPath);
       const remoteCopybook = DownloadUtil.getRemoteCopybookName(
         memberList,
@@ -85,7 +87,7 @@ export class CopybookDownloaderForDsn extends ZoweExplorerDownloader {
     const response = await this.explorerAPI
       .getMvsApi(profile)
       .allMembers(dataset);
-    const members = response.apiResponse.items.map((item: any) => item.member);
+    const members = response.apiResponse.items.map((item) => item.member);
 
     this.memberListCache.set(id, members);
     return members;
@@ -117,12 +119,17 @@ export class CopybookDownloaderForDsn extends ZoweExplorerDownloader {
       .getMvsApi(loadedProfile)
       .getContents(
         `${dataset}(${DownloadUtil.getFilenameWithoutExtension(member)})`,
-        { ...downloadOptions, file: downloadOptions.file.fsPath },
+        downloadOptions.apiOptions,
       );
-    await this.encodeDownloadedContent(
-      downloadOptions.file,
-      downloadOptions.encoding,
-      true,
-    );
+
+    if (downloadOptions.decode) {
+      await this.decodeBinaryContent(
+        downloadOptions.fileUri,
+        downloadOptions.decode,
+        true,
+      );
+    }
+
+    return true;
   }
 }

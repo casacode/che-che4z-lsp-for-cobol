@@ -24,11 +24,10 @@ import org.eclipse.lsp.cobol.common.AnalysisResult;
 import org.eclipse.lsp.cobol.common.file.WorkspaceFileService;
 import org.eclipse.lsp.cobol.common.model.Locality;
 import org.eclipse.lsp.cobol.common.model.tree.CopyNode;
-import org.eclipse.lsp.cobol.common.model.tree.Node;
+import org.eclipse.lsp.cobol.common.model.tree.RootNode;
 import org.eclipse.lsp.cobol.lsp.analysis.AnalysisState;
 import org.eclipse.lsp.cobol.lsp.analysis.AsyncAnalysisService;
 import org.eclipse.lsp.cobol.service.CobolDocumentModel;
-import org.eclipse.lsp.cobol.service.UriDecodeService;
 import org.eclipse.lsp4j.Location;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
@@ -43,12 +42,11 @@ class SourceUnitGraphTest {
   public static final String URI = "file://document.cbl";
   @Mock private WorkspaceFileService fileService;
   @Mock private AsyncAnalysisService asyncAnalysisService;
-  private final UriDecodeService uriDecodeService = new UriDecodeService();
 
   @Test
   void testNotifyState() {
     SourceUnitGraph sourceUnitGraph =
-        new SourceUnitGraph(fileService, asyncAnalysisService, uriDecodeService);
+        new SourceUnitGraph(fileService, asyncAnalysisService);
     String initialDocumentText = "sample text for test";
     String updatedContent = "Updated content";
     sourceUnitGraph.notifyState(
@@ -58,7 +56,7 @@ class SourceUnitGraphTest {
 
     assertEquals(initialDocumentText, sourceUnitGraph.getContent(URI));
     assertTrue(sourceUnitGraph.isFileOpened(URI));
-    assertFalse(sourceUnitGraph.isCopybook(URI));
+    assertFalse(sourceUnitGraph.isUserSuppliedCopybook(URI));
 
     sourceUnitGraph.updateContent(URI, updatedContent);
     assertEquals(updatedContent, sourceUnitGraph.getContent(URI));
@@ -71,8 +69,8 @@ class SourceUnitGraphTest {
     String copy2Uri = "file://copy2.cpy";
     String copy3Uri = "file://copy3.cpy";
     SourceUnitGraph sourceUnitGraph =
-        new SourceUnitGraph(fileService, asyncAnalysisService, uriDecodeService);
-    Node rootNode = mock(Node.class);
+        new SourceUnitGraph(fileService, asyncAnalysisService);
+    RootNode rootNode = mock(RootNode.class);
     when(fileService.getPathFromURI(anyString())).thenReturn(Paths.get(""));
     when(fileService.getContentByPath(any()))
         .thenReturn("COPY 1 TEXT")
@@ -103,10 +101,10 @@ class SourceUnitGraphTest {
         AnalysisState.COMPLETED, model, SourceUnitGraph.EventSource.FILE_SYSTEM);
 
     assertEquals("COPY 3 TEXT", sourceUnitGraph.getCopyNodeContent(copyNode3));
-    assertTrue(sourceUnitGraph.isCopybook(copy1Uri));
-    assertTrue(sourceUnitGraph.isCopybook(copy2Uri));
-    assertTrue(sourceUnitGraph.isCopybook(copy3Uri));
-    assertFalse(sourceUnitGraph.isCopybook(URI));
+    assertTrue(sourceUnitGraph.isUserSuppliedCopybook(copy1Uri));
+    assertTrue(sourceUnitGraph.isUserSuppliedCopybook(copy2Uri));
+    assertTrue(sourceUnitGraph.isUserSuppliedCopybook(copy3Uri));
+    assertFalse(sourceUnitGraph.isUserSuppliedCopybook(URI));
 
     List<SourceUnitGraph.NodeV> injectedCopybookNode =
         sourceUnitGraph.getInjectedCopybookNode(URI, new Position(2, 9));

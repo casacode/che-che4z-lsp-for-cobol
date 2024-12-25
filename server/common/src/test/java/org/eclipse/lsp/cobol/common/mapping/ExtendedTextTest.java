@@ -20,7 +20,6 @@ import org.eclipse.lsp4j.Range;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test for ExtendedText class
@@ -86,7 +85,7 @@ class ExtendedTextTest {
   @Test
   void insertExtendedText() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
-    extendedText.insert(new Range(new Position(1, 7), new Position(2, 7)), new ExtendedText("COPYBOOK 1 LINE\r\nCOPYBOOK 2 LINE\r\nCOPYBOOK 3 LINE", "copybook"));
+    extendedText.insert(new Range(new Position(1, 7), new Position(2, 8)), new ExtendedText("COPYBOOK 1 LINE\r\nCOPYBOOK 2 LINE\r\nCOPYBOOK 3 LINE", "copybook"));
 
     Range range = new Range(new Position(2, 0), new Position(2, 3));
     Location location = extendedText.mapLocation(range);
@@ -141,7 +140,7 @@ class ExtendedTextTest {
     assertEquals(range.toString(), location.getRange().toString());
     assertEquals("uri", location.getUri());
 
-    Range deleteRange = new Range(new Position(1, 1), new Position(1, 3));
+    Range deleteRange = new Range(new Position(1, 1), new Position(1, 4));
     extendedText.delete(deleteRange);
 
     Range newRange = new Range(new Position(1, 1), new Position(1, 6));
@@ -159,7 +158,7 @@ class ExtendedTextTest {
   void testDeleteTwoLines() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range deleteRange = new Range(new Position(1, 6), new Position(2, 3));
+    Range deleteRange = new Range(new Position(1, 6), new Position(2, 4));
     extendedText.delete(deleteRange);
 
     Range newRange = new Range(new Position(2, 1), new Position(2, 6));
@@ -177,7 +176,7 @@ class ExtendedTextTest {
   void testDeleteRange() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range deleteRange = new Range(new Position(1, 6), new Position(3, 3));
+    Range deleteRange = new Range(new Position(1, 6), new Position(3, 4));
     extendedText.delete(deleteRange);
 
     Range newRange = new Range(new Position(2, 1), new Position(2, 6));
@@ -194,7 +193,7 @@ class ExtendedTextTest {
   void testClearInsideOneLine() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(0, 8), new Position(0, 9));
+    Range range = new Range(new Position(0, 8), new Position(0, 10));
     extendedText.clear(range);
 
     assertEquals("     0 L  E\n"
@@ -207,8 +206,9 @@ class ExtendedTextTest {
   void testClearTwoLinesRange() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(0, 8), new Position(1, 5));
+    Range range = new Range(new Position(0, 8), new Position(1, 6));
     extendedText.clear(range);
+
 
     assertEquals("     0 L   \n"
         + "       LINE\n"
@@ -220,7 +220,7 @@ class ExtendedTextTest {
   void testClearBigRange() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(0, 8), new Position(3, 8));
+    Range range = new Range(new Position(0, 8), new Position(3, 9));
     extendedText.clear(range);
 
     assertEquals("     0 L   \n"
@@ -233,7 +233,7 @@ class ExtendedTextTest {
   void testReplaceInsideOneLine() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(1, 8), new Position(1, 9));
+    Range range = new Range(new Position(1, 8), new Position(1, 10));
     Location instantLocation = new Location("replace", range);
     extendedText.replace(range, "_NEW_", instantLocation);
 
@@ -251,7 +251,7 @@ class ExtendedTextTest {
   void testReplaceTwoLines() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(1, 8), new Position(2, 9));
+    Range range = new Range(new Position(1, 8), new Position(2, 10));
     Location instantLocation = new Location("replace", range);
     extendedText.replace(range, "_NEW_", instantLocation);
 
@@ -269,7 +269,7 @@ class ExtendedTextTest {
   void testReplaceBigRange() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(1, 8), new Position(3, 9));
+    Range range = new Range(new Position(1, 8), new Position(3, 10));
     Location instantLocation = new Location("replace", range);
     extendedText.replace(range, "_NEW_", instantLocation);
 
@@ -286,7 +286,7 @@ class ExtendedTextTest {
   void testReplaceInsideOneLineMultipleLinesText() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(1, 8), new Position(1, 9));
+    Range range = new Range(new Position(1, 8), new Position(1, 10));
     Location instantLocation = new Location("replace", range);
     extendedText.replace(range, "_NEW1_\n     _NEW2_", instantLocation);
 
@@ -305,7 +305,7 @@ class ExtendedTextTest {
   void testReplaceTwoLinesMultipleLinesText() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(1, 8), new Position(2, 9));
+    Range range = new Range(new Position(1, 8), new Position(2, 10));
     Location instantLocation = new Location("replace", range);
     extendedText.replace(range, "_NEW1_\n     _NEW2_", instantLocation);
 
@@ -323,7 +323,7 @@ class ExtendedTextTest {
   void testReplaceBigRangeMultipleLinesText() {
     ExtendedText extendedText = new ExtendedText(TEXT, "uri");
 
-    Range range = new Range(new Position(1, 8), new Position(3, 9));
+    Range range = new Range(new Position(1, 8), new Position(3, 10));
     Location instantLocation = new Location("replace", range);
     extendedText.replace(range, "_NEW1_\n     _NEW2_", instantLocation);
 
@@ -360,16 +360,16 @@ class ExtendedTextTest {
 
   @Test
   void testInsertWithPadding() {
-    Range range = new Range(new Position(1, 2), new Position(2, 4));
+    Range range = new Range(new Position(1, 2), new Position(2, 5));
     ExtendedText extendedText = new ExtendedText("example_text\nexample_text", "example_uri");
     ExtendedText copybook1 = new ExtendedText("COPY1 LINE 0\nCOPY1 LINE 1\nCOPY1 LINE 2", "copybook1");
-    ExtendedText expectedCopybook = new ExtendedText("COPY1 LINE 0\nCO  example_text        \n  example_text      LINE 2", "copybook1");
+    ExtendedText expectedCopybook = new ExtendedText("COPY1 LINE 0\nCOexample_text\n  example_text LINE 2", "copybook1");
 
     copybook1.insertWithPadding(range, extendedText);
 
-    assertTrue(copybook1.getLines().get(0).toString().equals(expectedCopybook.getLines().get(0).toString()));
-    assertTrue(copybook1.getLines().get(1).toString().equals(expectedCopybook.getLines().get(1).toString()));
-    assertTrue(copybook1.getLines().get(2).toString().equals(expectedCopybook.getLines().get(2).toString()));
+    assertEquals(expectedCopybook.getLines().get(0).toString(), copybook1.getLines().get(0).toString());
+    assertEquals(expectedCopybook.getLines().get(1).toString(), copybook1.getLines().get(1).toString());
+    assertEquals(expectedCopybook.getLines().get(2).toString(), copybook1.getLines().get(2).toString());
   }
 
 }

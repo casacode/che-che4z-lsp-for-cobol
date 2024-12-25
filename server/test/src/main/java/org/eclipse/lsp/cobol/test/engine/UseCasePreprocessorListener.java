@@ -35,6 +35,7 @@ import org.eclipse.usecase.UseCasePreprocessorParser.*;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 import static java.util.Collections.singletonList;
 import static java.util.Optional.ofNullable;
@@ -52,7 +53,9 @@ class UseCasePreprocessorListener extends UseCasePreprocessorBaseListener {
   private final Map<String, List<Diagnostic>> diagnostics = new HashMap<>();
   private final Map<String, List<Location>> variableDefinitions = new HashMap<>();
   private final Map<String, List<Location>> variableUsages = new HashMap<>();
+  private final Map<String, List<Location>> functionUsages = new HashMap<>();
   private final Map<String, List<Location>> paragraphDefinitions = new HashMap<>();
+  private final Map<String, List<Location>> functionDefinitions = new HashMap<>();
   private final Map<String, List<Location>> paragraphUsages = new HashMap<>();
   private final Map<String, List<Location>> sectionDefinitions = new HashMap<>();
   private final Map<String, List<Location>> sectionUsages = new HashMap<>();
@@ -115,7 +118,9 @@ class UseCasePreprocessorListener extends UseCasePreprocessorBaseListener {
             copybookDefinitions,
             copybookUsages,
             makeSubroutinesDefinitions(subroutineNames),
-            subroutineUsages);
+            subroutineUsages,
+            functionDefinitions,
+            functionUsages);
   }
 
   @Override
@@ -227,6 +232,47 @@ class UseCasePreprocessorListener extends UseCasePreprocessorBaseListener {
                                     ctx,
                                     it.replacement(),
                                     paragraphDefinitions,
+                                    ctx.diagnostic()));
+  }
+
+  @Override
+  public void enterFunctionDefinition(FunctionDefinitionContext ctx) {
+    push();
+  }
+
+  @Override
+  public void exitFunctionDefinition(FunctionDefinitionContext ctx) {
+    String multiTokenText = peek().toString().replaceAll(Pattern.quote("{$$*"), "").replaceAll("}", "");
+    String affectedTokens = multiTokenText.substring(0, multiTokenText.indexOf('|'));
+    String functionID = ctx.diagnostic().identifier().getText();
+    addTokenLocation(
+        functionDefinitions,
+        functionID,
+        new Range(
+            new Position(ctx.getStart().getLine() - 1, ctx.start.getCharPositionInLine()),
+            new Position(
+                ctx.diagnostic().start.getLine() - 1,
+                ctx.diagnostic().start.getCharPositionInLine() - lineShifts[getLine(ctx.diagnostic().start)])));
+    pop();
+    write(affectedTokens);
+  }
+
+  @Override
+  public void enterFunctionUsage(FunctionUsageContext ctx) {
+    push();
+  }
+
+  @Override
+  public void exitFunctionUsage(FunctionUsageContext ctx) {
+    pop();
+    ofNullable(ctx.word())
+            .ifPresent(
+                    it ->
+                            processToken(
+                                    it.identifier().getText(),
+                                    ctx,
+                                    it.replacement(),
+                                    functionUsages,
                                     ctx.diagnostic()));
   }
 
@@ -397,11 +443,8 @@ class UseCasePreprocessorListener extends UseCasePreprocessorBaseListener {
           ReplacementContext replacement,
           Map<String, List<Location>> storage,
           List<DiagnosticContext> diagnosticIds) {
-    String replacementText =
-            ofNullable(replacement)
-                    .map(ReplacementContext::identifier)
-                    .map(ParserRuleContext::getText)
-                    .orElse(text);
+
+    String replacementText = getReplacementText(text, replacement).get(0); // TODO support '->' multiplexing
 
     int tokenLength = text.length();
 
@@ -434,30 +477,49 @@ class UseCasePreprocessorListener extends UseCasePreprocessorBaseListener {
           List<DiagnosticContext> diagnosticIds,
           boolean stripQuotes) {
 
-    String replacementText =
-            ofNullable(replacement)
-                    .map(ReplacementContext::identifier)
-                    .map(ParserRuleContext::getText)
-                    .orElse(text);
-
     Range range = retrieveRange(ctx, text.length());
-    ofNullable(storage)
-            .ifPresent(
-                    it -> {
-                      String storedText = replacementText;
-                      if (stripQuotes) {
-                        storedText = StringUtils.trimQuotes(storedText);
-                      }
-                      if (replacement != null && replacement.ORIGINAL_SIZE_COPY_START() != null) {
-                        addTokenLocation(it, text.toUpperCase(), range);
-                      }
-                      addTokenLocation(it, storedText.toUpperCase(), range);
-                    });
 
-    ofNullable(replacement).ifPresent(addPositionShift());
+    if (storage != null) {
+      if (replacement != null && !replacement.PRODUCE_REPLACEMENT().isEmpty()) {
+        List<String> replacementsText = getReplacementText(text, replacement);
+        for (String rt: replacementsText) {
+            if (stripQuotes) {
+                rt = StringUtils.trimQuotes(rt);
+            }
+            addTokenLocation(storage, rt.toUpperCase(), range);
+        }
+      } else {
+          List<String> replacementsText = getReplacementText(text, replacement);
+          String storedText = replacementsText.get(0);
+          if (stripQuotes) {
+              storedText = StringUtils.trimQuotes(storedText);
+          }
+        if (replacement != null && replacement.ORIGINAL_SIZE_COPY_START() != null) {
+          addTokenLocation(storage, text.toUpperCase(), range);
+        }
+        addTokenLocation(storage, storedText.toUpperCase(), range);
+      }
+    }
+
+    if (replacement != null) {
+      addPositionShift().accept(replacement);
+    }
     registerDiagnostics(range, diagnosticIds);
     write(getHiddenText(tokens.getHiddenTokensToLeft(ctx.start.getTokenIndex())));
     write(text);
+  }
+
+  private static List<String> getReplacementText(String text, ReplacementContext replacement) {
+      if (replacement == null) {
+          return Collections.singletonList(text);
+      }
+
+      List<String> replacementTexts = new ArrayList<>();
+      List<IdentifierContext> ids = replacement.identifier();
+      for (IdentifierContext id: ids) {
+          replacementTexts.add(id.getText());
+      }
+      return replacementTexts;
   }
 
   private void addTokenLocation(Map<String, List<Location>> storage, String text, Range range) {
@@ -488,7 +550,8 @@ class UseCasePreprocessorListener extends UseCasePreprocessorBaseListener {
 
   private Consumer<ParserRuleContext> addPositionShift() {
     return it ->
-            lineShifts[getLine(it.start)] += it.start.getText().length() + it.stop.getText().length();
+            lineShifts[getLine(it.start)] +=
+                    it.stop.getCharPositionInLine() - it.start.getCharPositionInLine() + it.stop.getText().length();
   }
 
   private Consumer<Diagnostic> registerDiagnostic(Range range) {

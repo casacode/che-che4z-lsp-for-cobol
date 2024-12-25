@@ -21,8 +21,11 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lsp.cobol.common.mapping.ExtendedDocument;
+import org.eclipse.lsp.cobol.common.mapping.ExtendedTextLine;
 import org.eclipse.lsp.cobol.core.model.CobolLineTypeEnum;
 import org.eclipse.lsp.cobol.core.preprocessor.CobolLine;
 import org.eclipse.lsp.cobol.core.preprocessor.delegates.rewriter.CobolLineReWriter;
@@ -45,10 +48,11 @@ public abstract class CobolLineWriter {
    */
   public ExtendedDocument serialize(List<CobolLine> lines, String documentUri) {
     final StringBuilder sb = new StringBuilder();
-    final Map<Range, String> acc = new HashMap<>();
-    StringBuilder clSb = new StringBuilder();
+    final Map<Range, ExtendedTextLine> acc = new HashMap<>();
+    ExtendedTextLine clSb = null;
     Position start = null;
     lines.sort(Comparator.comparingInt(CobolLine::getNumber));
+    CobolProgramLayout layout = getLayout();
     for (final CobolLine line : lines) {
       final boolean isContinuationLine = CobolLineTypeEnum.CONTINUATION.equals(line.getType());
 
@@ -57,11 +61,11 @@ public abstract class CobolLineWriter {
           Position stop =
                   new Position(line.getNumber() - 1, sb.length() - sb.lastIndexOf("\n") - 1);
           Range range = new Range(start, stop);
-          acc.put(range, clSb.toString());
-          clSb = new StringBuilder();
+          acc.put(range, clSb);
+          clSb = null;
           start = null;
         }
-        process(sb, line);
+        process(sb, line, layout);
       }
 
       /*
@@ -72,11 +76,18 @@ public abstract class CobolLineWriter {
       if (isContinuationLine) {
         if (start == null) {
           CobolLine predecessor = line.getPredecessor();
-          int col = lineString(predecessor).length();
+          int col = lineString(predecessor, layout).length();
           start = new Position(predecessor.getNumber(), col);
         }
-        process(sb, line);
-        clSb.append(removeStartingQuote(line));
+        process(sb, line, layout);
+        String unquotedContinuedLine = removeStartingQuote(line);
+        Position unquotedExtendedLinePOsition = new Position(line.getNumber(), line.toString().indexOf(unquotedContinuedLine));
+        ExtendedTextLine extendedTextLine = new ExtendedTextLine(unquotedContinuedLine, unquotedExtendedLinePOsition, documentUri);
+        if (Objects.nonNull(clSb))  {
+          clSb.append(extendedTextLine);
+        } else {
+          clSb = extendedTextLine;
+        }
       }
     }
 
@@ -85,8 +96,7 @@ public abstract class CobolLineWriter {
     if (start != null) {
       CobolLine lastLine = lines.get(lines.size() - 1);
       Position stop = new Position(lastLine.getNumber(), sb.length() - sb.lastIndexOf("\n") - 1);
-      Range range = new Range(start, stop);
-      result.replace(range, clSb.toString());
+      result.replace(new Range(start, stop), clSb.toString());
     }
     result.commitTransformations();
     return result;
@@ -94,17 +104,17 @@ public abstract class CobolLineWriter {
 
   protected abstract CobolProgramLayout getLayout();
 
-  private void process(StringBuilder sb, CobolLine line) {
+  private void process(StringBuilder sb, CobolLine line, CobolProgramLayout layout) {
     if (line.getNumber() > 0) {
       sb.append(NEWLINE);
     }
-    sb.append(lineString(line));
+    sb.append(lineString(line, layout));
   }
 
-  private String lineString(CobolLine line) {
+  private String lineString(CobolLine line, CobolProgramLayout layout) {
     StringBuilder sb = new StringBuilder();
     if (line.getType() != CobolLineTypeEnum.PREPROCESSED) {
-      String blankSequenceArea = StringUtils.repeat(WS, getLayout().getSequenceLength());
+      String blankSequenceArea = StringUtils.repeat(WS, layout.getSequenceLength());
       sb.append(blankSequenceArea);
     }
     sb.append(line.getIndicatorArea());

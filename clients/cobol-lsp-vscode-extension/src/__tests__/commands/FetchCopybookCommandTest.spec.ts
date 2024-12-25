@@ -21,7 +21,7 @@ import { TelemetryService } from "../../services/reporter/TelemetryService";
 import { Utils } from "../../services/util/Utils";
 
 jest.mock("../../services/reporter/TelemetryService");
-Utils.getZoweExplorerAPI = jest.fn().mockReturnValue({});
+Utils.getZoweExplorerAPI = jest.fn().mockReturnValue({ api: {} });
 
 const copybook: string = "cobyBookTest";
 const progName: string = "progNameTest";
@@ -30,12 +30,11 @@ test("Test fetchCopybookCommand calls telementry services and copybook download 
   const copybookDownloadService: CopybookDownloadService =
     new CopybookDownloadService(
       "./storage-path",
-      {} as any as IApiRegisterClient,
-      undefined,
+      {} as unknown as IApiRegisterClient,
     );
   copybookDownloadService.downloadCopybooks = jest.fn();
   expect(fetchCopybookCommand).toBeTruthy();
-  fetchCopybookCommand(copybook, copybookDownloadService, progName);
+  await fetchCopybookCommand(copybook, copybookDownloadService, progName);
   expect(TelemetryService.registerEvent).toHaveBeenCalledWith(
     "Fetch copybook",
     ["COBOL", "copybook", "quickfix"],

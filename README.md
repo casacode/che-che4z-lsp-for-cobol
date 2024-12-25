@@ -13,9 +13,7 @@ COBOL Language Support enhances the COBOL programming experience on your IDE. Th
 
 COBOL Language Support recognizes files with the extensions `.cob`, `.cbl` and `.cobol` as COBOL files.
 
-> How can we improve COBOL Language Support? [Let us know on our Git repository](https://github.com/eclipse/che-che4z-lsp-for-cobol/issues)
-
-This extension is a part of the [Che4z](https://github.com/eclipse/che-che4z) open-source project. Feel free to contribute right here.
+This extension is a part of the Che4z open-source project. To contribute and report issues, visit our [Git repository](https://github.com/eclipse/che-che4z-lsp-for-cobol).
 
 COBOL Language Support is also part of [Code4z](https://techdocs.broadcom.com/code4z), an all-round VS Code extension package that offers a modern experience for mainframe application developers, including tools for language support, data editing, testing, and source code management. For an interactive overview of Code4z, see the [Code4z Developer Cockpit](https://mainframe.broadcom.com/code4z-developer-cockpit).
 
@@ -31,14 +29,15 @@ This extension is not compatible with other extensions that provide COBOL suppor
 
 The COBOL Language Support extension only supports IBM Enterprise COBOL. Other versions of COBOL are not supported.
 
-## Integration with Zowe Explorer
+## Integration with Zowe Explorer and Explorer for Endevor
 
-Integrating COBOL Language Support with Zowe Explorer lets you:
+Integrating COBOL Language Support with the Zowe Explorer and Explorer for Endevor extensions let you:
 
 - Load your data sets containing COBOL code directly from the data set tree.
+- Load your COBOL code directly from Endevor elements.
 - Enable automatic copybook retrieval from the mainframe.
 
-To enable these features, install the [Zowe Explorer](https://marketplace.visualstudio.com/items?itemName=Zowe.vscode-extension-for-zowe) extension and configure a Zowe Explorer `zosmf` or `zftp` profile with credentials and a connection URL.
+Both Zowe Explorer and Explorer for Endevor are available as part of the [Code4z extension pack](https://marketplace.visualstudio.com/items?itemName=broadcomMFD.code4z-extension-pack). A Zowe Explorer `zosmf` or `zftp` profile with credentials and a connection URL is also required to retrieve copybooks from mainframe data sets.
 
 <a href="https://www.openmainframeproject.org/all-projects/zowe/conformance"><img alt="This extension is Zowe v2 conformant" src="https://artwork.openmainframeproject.org/other/zowe-conformant/zowev2/explorer/color/zowe-conformant-zowev2-explorer-color.png" width=20% height=20% /></a>
 
@@ -61,7 +60,7 @@ The autocomplete feature is only available in the main COBOL file, not in copybo
 ![Autocomplete](/docs/images/CLSAutocorrect.gif)
 
 ### Syntax and Semantic Check for Code
-This feature checks for mistakes and errors in COBOL code. The syntax check feature reviews the whole content of the code and suggests fixes, through syntax and semantic analysis which returns diagnostics on the entire context of the code, not just keywords.
+This feature checks for mistakes and errors in COBOL code. The syntax check feature reviews the whole content of the code and suggests fixes, and the semantic analysis highlights incorrect names of variables, copybooks and paragraphs.
 
 This feature is also enabled for Datacom, CICS, and DB2 SQL keywords and variables.
 
@@ -73,13 +72,13 @@ The extension enables syntax highlighting for COBOL code.
 ### Syntax Coloring
 Contrasting colors are used in displayed code for ease of identifying and distinguishing keywords, variables, paragraphs and sections.
 
-### Outline View and Breadcrumb View
-The extension enables outline view and breadcrumb view, which show the structure of elements within the program and allow easy navigation between them.
+### Outline View and Breadcrumbs
+The extension enables outline view and the breadcrumbs navigation bar at the top of the edit window, which show the structure of elements within the program and allow easy navigation between them.
 
 ### Code Snippets
 Before you write your COBOL code from scratch, search the snippet library for useful templates.
 
-1. Press `F1` to open the command palette.
+1. Press **F1** to open the command palette.
 2. Type **Insert Snippet** and press enter.
 3. Select the snippet that you want to insert.
 
@@ -87,7 +86,7 @@ Before you write your COBOL code from scratch, search the snippet library for us
 
 You can also insert a code snippet by typing the name of the snippet in your code and clicking on the autocomplete text.
 
-The COBOL Language Support extension also supports user snippets. Add your custom snippets to the `COBOL.json` file in your user snippets folder.
+The COBOL Language Support extension also supports user snippets. Add your custom snippets to the `COBOL.json` file in your user snippets folder. To access your user snippets file, press **F1** to open the command pallette, and run the command **Snippets: Configure Snippets**.
 
 ### Smart Tab
 
@@ -146,7 +145,7 @@ To enable subroutine support, specify the paths of folders containing subroutine
 3. Under **Subroutine-manager: Paths-local**, specify the paths of the folders containing subroutines.
    - **Tip:** We recommend that you specify relative paths from the workspace root. To obtain the relative path of a folder in your workspace, right-click it in the folder tree and select **Copy Relative Path**.
    - The folders are searched in the order they are listed. If two folders contain a subroutine with the same file name, the one from the folder higher on the list is used.
-4. Open a program or project.  
+4. Open a file or folder.  
    Subroutine support features are now enabled.
 
 If you specify your subroutine folders using absolute paths or paths containing `../` or `./`, the subroutine folders are not watched for changes. You might need to resolve names of recently added files in your code manually.
@@ -179,14 +178,14 @@ You can store your copybooks locally in folders in your workspace and specify th
    - You can use [Glob](https://www.npmjs.com/package/glob) wildcards, such as * to substitute one whole level of the path. For example, specifying the path `*/copybooks` searches all subfolders named "copybooks" in  subfolders of your workspace root, while the path `copybooks/*` searches all subfolders one level below the `copybooks` folder in the workspace root. For more information on available wildcards, see the [Glob Primer](https://www.npmjs.com/package/glob#Glob-Primer)
    - The folders are searched in the order they are listed, or in alphabetical order if multiple paths are indexed by a wildcard. If two folders contain a copybook with the same file name, the one from the folder higher on the list is used.
 4. (Optional) Under **Cpy-manager: Copybook-extensions**, specify the file extensions used for your copybooks. The default supported file extensions are `.cpy` and `.copy`.
-5. Open a program or project.  
+5. Open a file or folder.  
    Copybook support features are now enabled.
 
 If you specify your copybook folders using absolute paths or paths containing `../` or `./`, the copybook folders are not watched for changes. You might need to resolve names of recently added copybooks in your code manually.
 
 To resolve copybook names manually, hover over the copybook name with the error underline, select **Quick Fix...** and **Resolve copybook**.
 
-### Retrieving Copybooks from the Mainframe
+### Retrieving Copybooks from Mainframe Data Sets and USS Files
 
 You can also set up automatic copybook retrieval from the mainframe to download copybooks from mainframe data sets and USS directories to your workspace.
 
@@ -198,13 +197,25 @@ You can also set up automatic copybook retrieval from the mainframe to download 
 6. Under **Cpy-manager: Profiles**, enter the name of your Zowe Explorer profile.
 7. (Optional) Under **Cpy-manager: Copybook-extensions**, specify the file extensions used for your copybooks. The default supported file extensions are `.cpy` and `.copy`.
 8. (Optional) Under **Cpy-manager: Copybook-file-encoding**, specify the file encoding used in your copybooks. COBOL Language Support converts copybooks that it downloads from the mainframe from the specified encoding to UTF-8.
-9. Open a program or project.  
-   All copybooks used in the program or project which are not stored locally are downloaded from the mainframe data sets and USS directories that you specified in steps 4 and 5.  
+9. Open a file or folder.  
+   All copybooks used in the program which are not stored locally are downloaded from the mainframe data sets and USS directories that you specified in steps 4 and 5.  
    Copybook support features are now enabled.
 
-Copybooks that you retrieve from mainframe data sets are stored in the **.c4z/.copybooks** directory within the workspace, which is created automatically. 
+Copybooks that you retrieve from mainframe data sets are stored in your VS Code global storage folder. 
 
-We recommend that you refresh your copybooks from time to time. To refresh your copybooks, press **F1** and run the command **Clear downloaded copybooks**. This command clears the **.c4z/.copybooks** directory so that copybooks are downloaded again from the mainframe.
+Changes you make to copybooks that you retrieve from mainframe data sets are not saved back to the mainframe. To edit the content of your copybooks, we recommend that you use Zowe Explorer.
+
+We recommend that you refresh your copybooks from time to time. To refresh your copybooks, press **F1** and run the command **Clear downloaded copybooks**. This command clears the global storage folder so that copybooks are downloaded again from the mainframe.
+
+### Retrieving Copybooks from Endevor
+
+When you open a COBOL file using Explorer for Endevor, COBOL copybooks that are specified in the Endevor element processor group are automatically downloaded to your VS Code global storage folder.
+
+The extension setting **Cpy-manager: Endevor-dependencies** determines how copybooks are retrieved from the mainframe when you open a COBOL file in Explorer for Endevor. This setting has the following options:
+* **ENDEVOR_PROCESSOR**
+  * Downloads copybooks from locations that are specified in the Endevor element processor group.
+* **ZOWE**
+  * Downloads copybooks from locations that are specified in the **paths-dsn** and **paths-uss** settings.
 
 ### Copybook Support Features
 
@@ -360,40 +371,3 @@ To enable troubleshooting logs for the LSP server, specify a value for the param
 These values are ordered from returning the least information ("ERROR"; errors only) to the most information ("ALL"; all details).
 
 To view troubleshooting logs, open the output panel and select **COBOL Language Support** from the drop-down menu.
-
-## Technical Assistance and Support for COBOL Language Support
-
-The COBOL Language Support extension is made available to customers on the Visual Studio Code Marketplace in accordance with the terms and conditions contained in the provided End-User License Agreement (EULA).
-
-If you are on active support for Brightside, you get technical assistance and support in accordance with the terms, guidelines, details, and parameters that are located within the Broadcom [Working with Support](https://support.broadcom.com/external/content/release-announcements/CA-Support-Policies/6933) guide.
-
-This support generally includes:
-
-* Telephone and online access to technical support
-* Ability to submit new incidents 24x7x365
-* 24x7x365 continuous support for Severity 1 incidents
-* 24x7x365 access to Broadcom Support
-* Interactive remote diagnostic support
-* Technical support cases must be submitted to Broadcom in accordance with guidance provided in “Working with Support”.
-
-Note: To receive technical assistance and support, you must remain compliant with “Working with Support”, be current on all applicable licensing and maintenance requirements, and maintain an environment in which all computer hardware, operating systems, and third party software associated with the affected Broadcom software are on the releases and version levels from the manufacturer that Broadcom designates as compatible with the software. Changes you elect to make to your operating environment could detrimentally affect the performance of Broadcom software and Broadcom shall not be responsible for these effects or any resulting degradation in performance of the Broadcom software. Severity 1 cases must be opened via telephone and elevations of lower severity incidents to Severity 1 status must be requested via telephone.
-
-## Privacy Notice
-The extensions for Visual Studio Code developed by Broadcom Inc., including its corporate affiliates and subsidiaries, ("Broadcom") are provided free of charge, but in order to better understand and meet its users’ needs, Broadcom may collect, use, analyze and retain anonymous users’ metadata and interaction data, (collectively, “Usage Data”) and aggregate such Usage Data with similar Usage Data of other Broadcom customers. Please find more detailed information in [License and Service Terms & Repository](https://www.broadcom.com/company/legal/licensing).
-
-This data collection uses built-in Microsoft VS Code Telemetry, which can be disabled, at your sole discretion, if you do not want to send Usage Data.
-
-The current release of COBOL Language Support collects anonymous data for the following events:
-* Activation of this VS Code extension
-* Problem interaction
-* Quick Fix
-* Invalid ZOWE credentials
-* ZOWE connection issues
-* Java version issues
-
-Each such event is logged with the following information:
-* Event time
-* Operating system and version
-* Country or region
-* Anonymous user and session ID
-* Version numbers of Microsoft VS Code and COBOL Language Support

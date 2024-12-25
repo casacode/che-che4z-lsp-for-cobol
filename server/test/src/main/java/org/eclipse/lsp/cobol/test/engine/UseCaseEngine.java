@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.google.gson.JsonElement;
+
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -42,6 +43,7 @@ import org.eclipse.lsp.cobol.common.dialects.CobolLanguageId;
 import org.eclipse.lsp.cobol.common.model.DefinedAndUsedStructure;
 import org.eclipse.lsp.cobol.common.model.NodeType;
 import org.eclipse.lsp.cobol.common.model.tree.CopyNode;
+import org.eclipse.lsp.cobol.common.model.tree.FunctionReference;
 import org.eclipse.lsp.cobol.common.model.tree.ProgramNode;
 import org.eclipse.lsp.cobol.common.model.tree.variable.VariableNode;
 import org.eclipse.lsp.cobol.common.symbols.SymbolTable;
@@ -261,7 +263,8 @@ public class UseCaseEngine {
             .orElse(SQLBackend.DB2_SERVER);
     PreprocessedDocument document =
         AnnotatedDocumentCleaning.prepareDocument(
-            text, copybooks, subroutineNames, expectedDiagnostics, sqlBackendSetting);
+            text, copybooks, subroutineNames, expectedDiagnostics, sqlBackendSetting, analysisConfig.getCompilerOptions());
+
     AnalysisResult actual =
         analyze(
             UseCase.builder()
@@ -278,6 +281,7 @@ public class UseCaseEngine {
                 .build(),
             languageId);
     assertResultEquals(actual, document.getTestData());
+    UseCaseUtils.storeDocumentToUnitTextExtensionContext(document.getText(), document.getCopybooks(), document.getTestData());
     return actual;
   }
 
@@ -343,7 +347,7 @@ public class UseCaseEngine {
 
     PreprocessedDocument document =
         AnnotatedDocumentCleaning.prepareDocument(
-            text, copybooks, subroutineNames, expectedDiagnostics, sqlBackendSetting);
+            text, copybooks, subroutineNames, expectedDiagnostics, sqlBackendSetting, analysisConfig.getCompilerOptions());
     AnalysisResult actual =
         analyze(
             UseCase.builder()
@@ -400,6 +404,16 @@ public class UseCaseEngine {
         "Subroutine usage:",
         expected.getSubroutineUsages(),
         extractUsages(actual, SUBROUTINE_NAME_NODE));
+
+    assertResult(
+            "Function definition:",
+            expected.getFunctionDefinitions(),
+            extractFunctionDefinitions(actual));
+
+    assertResult(
+            "Function usage:",
+            expected.getFunctionUsages(),
+            extractDefinitionsUsage(actual));
   }
 
   private Map<String, List<Location>> extractVariableDefinitions(AnalysisResult result) {
@@ -442,6 +456,37 @@ public class UseCaseEngine {
         context ->
             !(context.getDefinitions().isEmpty()
                 || ImplicitCodeUtils.isImplicit(context.getDefinitions().get(0).getUri())));
+  }
+
+  private Map<String, List<Location>> extractFunctionDefinitions(AnalysisResult result) {
+    return result
+        .getRootNode()
+        .getDepthFirstStream()
+        .filter(hasType(FUNCTION_REFERENCE))
+        .map(FunctionReference.class::cast)
+        .filter(
+            context ->
+                !(context.getDefinitions().isEmpty()
+                    || ImplicitCodeUtils.isImplicit(context.getDefinitions().get(0).getUri())))
+        .collect(
+            Collectors.toMap(
+                fr -> fr.getName().toUpperCase(Locale.ROOT),
+                FunctionReference::getDefinitions,
+                (l1, l2) -> Stream.concat(l1.stream(), l2.stream()).distinct().collect(toList())));
+  }
+
+  private Map<String, List<Location>> extractDefinitionsUsage(AnalysisResult result) {
+    return result
+        .getRootNode()
+        .getDepthFirstStream()
+        .filter(hasType(FUNCTION_REFERENCE))
+        .map(FunctionReference.class::cast)
+        .filter(context -> !context.getDefinitions().isEmpty())
+        .collect(
+            Collectors.toMap(
+                d -> d.getName().toUpperCase(Locale.ROOT),
+                d -> ImmutableList.of(d.getLocality().toLocation()),
+                (l1, l2) -> Stream.concat(l1.stream(), l2.stream()).distinct().collect(toList())));
   }
 
   private Map<String, List<Location>> extractUsages(AnalysisResult result, NodeType nodeType) {

@@ -30,7 +30,7 @@ interface EndevorType {
 }
 
 type TypeOrArray<T> = T | T[];
-function asArray<T>(o: TypeOrArray<T>) {
+export function asArray<T>(o: TypeOrArray<T>) {
   if (Array.isArray(o)) return o;
   return [o];
 }
@@ -44,12 +44,6 @@ export type ExternalConfigurationOptions = {
   compiler: string;
   preprocessor: string[];
   type: string;
-};
-
-export const defaultConfigs: ExternalConfigurationOptions = {
-  compiler: "IGYCRCTL",
-  preprocessor: ["DSNHPC", "DFHECP1$"],
-  type: ProcessorConfigurationType.COBOL,
 };
 
 export interface E4E {
@@ -137,7 +131,6 @@ type E4EExternalConfigurationResponse = {
 };
 
 interface e4eResponse {
-  api: E4E;
   profile: ResolvedProfile;
   uri: string;
   elements: { [key: string]: EndevorElement | EndevorMember };

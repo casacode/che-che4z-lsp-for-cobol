@@ -15,6 +15,7 @@
     },
     "children": [
       {
+        "handleType": "CANCEL",
         "type": "execcicshandle",
         "location": {
           "uri": "fake/path",
@@ -24,7 +25,7 @@
           },
           "end": {
             "line": 17,
-            "character": 21
+            "character": 20
           }
         }
       },
@@ -38,7 +39,7 @@
           },
           "end": {
             "line": 17,
-            "character": 21
+            "character": 20
           }
         }
       }
